@@ -10,27 +10,45 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 - Prompts, retrieval logic, embeddings, and evaluations are versioned release artifacts.
 - The system is designed for continuous improvement through telemetry, feedback, and regression testing.
 
+## Implementation Status
+
+| Capability | Status | Notes |
+| --- | --- | --- |
+| Access-before-ranking | **Implemented** | `AccessPolicy` filters chunks before scoring |
+| Hybrid in-memory retrieval | **Implemented** | BM25-like + semantic proxy + freshness |
+| Retriever / Reranker ports | **Implemented** | Swap vector DB or cross-encoder behind protocols |
+| Reference reranker | **Implemented** | `ScoreBoostReranker` (no ML deps) |
+| Pipeline telemetry spans | **Implemented** | `EventRecorder` wired through `RagPipeline` |
+| Guardrails + HITL risk flags | **Implemented** | PII redaction, `human_approval_required` |
+| HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies` |
+| Golden eval fixtures | **Implemented** | `tests/fixtures/golden_queries.json` |
+| Vector store adapter | Planned | Behind `Retriever` port |
+| Knowledge graph expansion | Planned | Not in reference package |
+| OpenTelemetry exporters | Planned | JSON span recorder today |
+| Cross-encoder reranker | Planned | Behind `Reranker` port |
+| AegisAI gateway bridge | Planned | Map `human_approval_required` to gateway HITL |
+
+See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, AegisAI, and AgentOps.
+
 ## System Context
 
 ```mermaid
 flowchart LR
   User["Enterprise User"] --> App["AI Assistant / Workflow App"]
-  App --> Gateway["RAG API Gateway"]
-  Gateway --> Policy["Policy, Identity, and Guardrails"]
-  Gateway --> Orchestrator["RAG Orchestrator"]
-  Orchestrator --> Retrieval["Retrieval Platform"]
-  Retrieval --> Search["Hybrid Search Index"]
-  Retrieval --> Vector["Vector Store"]
-  Retrieval --> Graph["Knowledge Graph"]
-  Orchestrator --> LLM["Model Router / LLMs"]
-  Orchestrator --> Eval["Evaluation and Feedback"]
-  Sources["Enterprise Sources"] --> Ingestion["Governed Ingestion"]
-  Ingestion --> Search
-  Ingestion --> Vector
-  Ingestion --> Graph
-  Gateway --> Obs["Observability, Audit, Cost"]
-  Orchestrator --> Obs
+  App --> Gateway["RAG API — FastAPI adapter"]
+  Gateway --> Policy["Guardrails + Access Policy"]
+  Gateway --> Orchestrator["RagPipeline"]
+  Orchestrator --> Retrieval["InMemoryHybridRetriever"]
+  Orchestrator --> Rerank["ScoreBoostReranker"]
+  Orchestrator --> Context["Context Assembler"]
+  Orchestrator --> Gen["Extractive Generator"]
+  Sources["Enterprise Sources"] --> Ingestion["POST /v1/ingest"]
+  Ingestion --> Retrieval
+  Gateway --> Obs["EventRecorder spans"]
+  Orchestrator --> Eval["Golden fixtures + eval/metrics"]
 ```
+
+*Solid boxes are implemented in this reference package. Vector store, graph, OTel exporters, and LLM routers are extension points documented in ADRs.*
 
 ## Runtime Request Flow
 
@@ -59,7 +77,7 @@ sequenceDiagram
   API->>G: Validate citations and output policy
   API->>E: Sample/judge quality signals
   API->>O: Trace, latency, token, cost, risk events
-  API-->>U: Answer + citations + risk state
+  API-->>U: Answer + citations + risk_flags + trace
 ```
 
 ## Data and Knowledge Lifecycle
@@ -158,6 +176,15 @@ cd enterprise_rag_platform
 python -m pip install -e ".[dev]"
 uvicorn enterprise_rag.api.app:app --reload
 ```
+
+API surface:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Liveness |
+| `GET /v1/strategies` | Retrieval modes and reranker options |
+| `POST /v1/ingest` | Add documents to the in-memory corpus |
+| `POST /v1/answer` | Grounded answer with citations, risk flags, and trace |
 
 ## Production Hardening Checklist
 

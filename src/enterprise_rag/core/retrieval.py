@@ -27,6 +27,13 @@ class InMemoryHybridRetriever:
         self._access_policy = access_policy or AccessPolicy()
         self._doc_freq = self._build_doc_freq(chunks)
 
+    def upsert(self, chunks: tuple[Chunk, ...]) -> int:
+        if not chunks:
+            return 0
+        self._chunks = self._chunks + chunks
+        self._doc_freq = self._build_doc_freq(self._chunks)
+        return len(chunks)
+
     def search(self, query: RetrievalQuery) -> tuple[RetrievalHit, ...]:
         query_terms = _tokens(query.query)
         hits: list[RetrievalHit] = []

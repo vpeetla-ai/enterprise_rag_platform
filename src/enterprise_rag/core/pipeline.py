@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from enterprise_rag.core.context import ContextAssembler
+from enterprise_rag.core.graph_expander import GraphExpander
 from enterprise_rag.core.guardrails import GuardrailService
 from enterprise_rag.core.models import Answer, RetrievalHit, RetrievalQuery
 from enterprise_rag.core.reranker import Reranker
@@ -37,6 +38,7 @@ class RagPipeline:
         assembler: ContextAssembler | None = None,
         guardrails: GuardrailService | None = None,
         reranker: Reranker | None = None,
+        graph_expander: GraphExpander | None = None,
         recorder: EventRecorder | None = None,
     ) -> None:
         self.retriever = retriever
@@ -44,6 +46,7 @@ class RagPipeline:
         self.assembler = assembler or ContextAssembler()
         self.guardrails = guardrails or GuardrailService()
         self.reranker = reranker
+        self.graph_expander = graph_expander
         self.recorder = recorder or EventRecorder()
 
     def answer(self, retrieval_query: RetrievalQuery) -> Answer:
@@ -60,6 +63,9 @@ class RagPipeline:
             )
             with self.recorder.span("rag.retrieve", mode=sanitized_query.mode.value):
                 hits = self.retriever.search(sanitized_query)
+            if self.graph_expander and hits:
+                with self.recorder.span("rag.graph_expand", hit_count=len(hits)):
+                    hits = self.graph_expander.expand(sanitized_query, hits, sanitized_query.top_k)
             if self.reranker and hits:
                 with self.recorder.span("rag.rerank"):
                     hits = self._rerank(sanitized_query, hits)

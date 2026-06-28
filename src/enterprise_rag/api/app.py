@@ -20,6 +20,8 @@ except ImportError:  # pragma: no cover
     BaseModel = object  # type: ignore[assignment,misc]
     Field = lambda *args, **kwargs: None  # type: ignore[assignment,misc]
 
+from enterprise_rag.core.entity_extract import extract_entities
+from enterprise_rag.core.graph_expander import InMemoryGraphExpander
 from enterprise_rag.core.ingestion import DocumentChunker
 from enterprise_rag.core.models import Classification, Principal, RetrievalMode, RetrievalQuery, SourceDocument
 from enterprise_rag.core.pipeline import RagPipeline
@@ -69,12 +71,38 @@ class AppState:
     def __init__(self) -> None:
         self.recorder = EventRecorder()
         self.retriever = _build_retriever()
+        self._all_chunks: list = []
         self._seed_demo_corpus()
+        self.graph_expander = InMemoryGraphExpander(tuple(self._all_chunks))
         self.pipeline = RagPipeline(
             self.retriever,
             reranker=ScoreBoostReranker(),
+            graph_expander=self.graph_expander,
             recorder=self.recorder,
         )
+
+    def _tag_chunks(self, chunks: tuple) -> tuple:
+        tagged = []
+        for chunk in chunks:
+            entities = extract_entities(chunk.text)
+            metadata = dict(chunk.metadata)
+            metadata["entities"] = ",".join(entities)
+            tagged.append(
+                chunk.__class__(
+                    chunk_id=chunk.chunk_id,
+                    document_id=chunk.document_id,
+                    tenant_id=chunk.tenant_id,
+                    text=chunk.text,
+                    source_title=chunk.source_title,
+                    source_uri=chunk.source_uri,
+                    owner=chunk.owner,
+                    classification=chunk.classification,
+                    allowed_groups=chunk.allowed_groups,
+                    metadata=metadata,
+                    updated_at=chunk.updated_at,
+                )
+            )
+        return tuple(tagged)
 
     def _seed_demo_corpus(self) -> None:
         document = SourceDocument(
@@ -94,7 +122,9 @@ class AppState:
             updated_at=datetime.now(UTC),
         )
         chunks = DocumentChunker(max_words=80, overlap_words=10).chunk(document).chunks
+        chunks = self._tag_chunks(chunks)
         self.retriever.upsert(chunks)
+        self._all_chunks.extend(chunks)
 
 
 def _gateway_payload(decision: Any) -> dict[str, Any]:
@@ -122,6 +152,7 @@ if FastAPI is not None:
             "retrieval_modes": [mode.value for mode in RetrievalMode],
             "rerankers": ["score_boost", "none"],
             "backends": ["memory", "qdrant"],
+            "graph_expansion": ["in_memory"],
             "notes": [
                 "Reference implementation uses in-memory hybrid lexical + semantic proxy scoring.",
                 "Set QDRANT_BACKEND=true with qdrant-client installed for vector adapter.",
@@ -183,7 +214,10 @@ if FastAPI is not None:
             updated_at=datetime.now(UTC),
         )
         chunks = DocumentChunker(max_words=80, overlap_words=10).chunk(document).chunks
+        chunks = state._tag_chunks(chunks)
         added = state.retriever.upsert(chunks)
+        state._all_chunks.extend(chunks)
+        state.graph_expander = InMemoryGraphExpander(tuple(state._all_chunks))
         return {
             "document_id": request.document_id,
             "chunks_added": added,
@@ -202,6 +236,7 @@ if FastAPI is not None:
         pipeline = RagPipeline(
             state.retriever,
             reranker=ScoreBoostReranker() if request.rerank else None,
+            graph_expander=state.graph_expander,
             recorder=state.recorder,
         )
         result = pipeline.answer(

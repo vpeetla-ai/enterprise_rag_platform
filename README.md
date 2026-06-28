@@ -25,7 +25,7 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | Vector store adapter | **Implemented** | `QdrantHybridRetriever` behind `QDRANT_BACKEND=true` |
 | AegisAI gateway bridge | **Implemented** | `integrations/aegis_bridge.py` for ingest + high-risk answers |
 | OpenTelemetry exporters | **Implemented** | OTLP/HTTP via `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| Cross-encoder reranker | Planned | Behind `Reranker` port |
+| Knowledge graph expansion | **Implemented** | `InMemoryGraphExpander` + ingest entity tagging |
 
 See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, AegisAI, and AgentOps.
 

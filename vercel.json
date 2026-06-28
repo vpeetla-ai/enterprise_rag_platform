@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://enterprise-rag-api.onrender.com/:path*"
+      "destination": "https://enterprise-rag-api-4el1.onrender.com/:path*"
     }
   ]
 }

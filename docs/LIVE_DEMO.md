@@ -3,7 +3,7 @@
 | Surface | URL |
 |---------|-----|
 | **UI (Vercel)** | https://enterprise-rag-platform.vercel.app |
-| **API (Render)** | https://enterprise-rag-api.onrender.com |
+| **API (Render)** | https://enterprise-rag-api-4el1.onrender.com |
 
 ## Deploy
 
@@ -15,6 +15,8 @@ npx vercel alias set <deployment-url> enterprise-rag-platform.vercel.app
 ```
 
 `vercel.json` rewrites `/api/*` to the Render API. Demo ships with seeded `policy-001` corpus — no vector DB required.
+
+> **Note:** If Render assigns a different hostname (e.g. `enterprise-rag-api-4el1.onrender.com`), update `demo/vercel.json` rewrite destination and redeploy the Vercel demo. `GET /` returns 404 by design — use `/health` or `/v1/answer`.
 
 ## Try locally
 

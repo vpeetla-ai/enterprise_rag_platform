@@ -1,0 +1,12 @@
+{
+  "framework": null,
+  "installCommand": "echo 'static demo'",
+  "buildCommand": "echo 'enterprise rag demo'",
+  "outputDirectory": ".",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://enterprise-rag-api.onrender.com/:path*"
+    }
+  ]
+}

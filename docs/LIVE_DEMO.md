@@ -9,8 +9,9 @@
 
 ```bash
 # API on Render — apply render.yaml blueprint
-# UI on Vercel — from repo root:
-npx vercel --prod
+# UI on Vercel — deploy static demo folder (avoids FastAPI auto-detect):
+cd demo && npx vercel --prod
+npx vercel alias set <deployment-url> enterprise-rag-platform.vercel.app
 ```
 
 `vercel.json` rewrites `/api/*` to the Render API. Demo ships with seeded `policy-001` corpus — no vector DB required.

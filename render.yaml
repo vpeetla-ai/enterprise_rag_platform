@@ -10,3 +10,9 @@ services:
     envVars:
       - key: AEGISAI_GATEWAY_ENABLED
         value: "false"
+      - key: QDRANT_BACKEND
+        value: "false"
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false

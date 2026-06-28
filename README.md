@@ -22,11 +22,10 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | Guardrails + HITL risk flags | **Implemented** | PII redaction, `human_approval_required` |
 | HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies` |
 | Golden eval fixtures | **Implemented** | `tests/fixtures/golden_queries.json` |
-| Vector store adapter | Planned | Behind `Retriever` port |
-| Knowledge graph expansion | Planned | Not in reference package |
-| OpenTelemetry exporters | Planned | JSON span recorder today |
+| Vector store adapter | **Implemented** | `QdrantHybridRetriever` behind `QDRANT_BACKEND=true` |
+| AegisAI gateway bridge | **Implemented** | `integrations/aegis_bridge.py` for ingest + high-risk answers |
+| OpenTelemetry exporters | **Implemented** | OTLP/HTTP via `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | Cross-encoder reranker | Planned | Behind `Reranker` port |
-| AegisAI gateway bridge | Planned | Map `human_approval_required` to gateway HITL |
 
 See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, AegisAI, and AgentOps.
 

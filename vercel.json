@@ -1,0 +1,10 @@
+{
+  "buildCommand": "echo 'enterprise rag demo'",
+  "outputDirectory": "demo",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://enterprise-rag-api.onrender.com/:path*"
+    }
+  ]
+}

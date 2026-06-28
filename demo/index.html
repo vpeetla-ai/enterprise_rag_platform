@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enterprise RAG Platform — Live Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">Governed Knowledge Layer</p>
+        <h1>Enterprise RAG Platform</h1>
+        <p class="lede">Access-aware hybrid retrieval, grounded citations, guardrails, and optional AegisAI HITL bridge.</p>
+      </header>
+
+      <section class="panel">
+        <label for="query">Enterprise question</label>
+        <textarea id="query" rows="3">Why does production RAG need evaluation and human approval?</textarea>
+        <div class="row">
+          <button id="ask" type="button">Ask with governance</button>
+          <button id="retrieve" type="button" class="ghost">Retrieve only</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel" id="answerPanel">
+          <h2>Answer</h2>
+          <p id="status" class="muted">Submit a query to call the live API (demo corpus seeded).</p>
+          <div id="answer" class="answer"></div>
+        </article>
+        <article class="panel">
+          <h2>Citations & risk</h2>
+          <ul id="citations"></ul>
+          <div id="riskFlags" class="flags"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Trace</h2>
+        <pre id="trace" class="trace"></pre>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

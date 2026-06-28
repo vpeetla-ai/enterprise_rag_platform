@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: enterprise-rag-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: AEGISAI_GATEWAY_ENABLED
+        value: "false"

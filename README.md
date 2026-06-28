@@ -1,5 +1,9 @@
 # Enterprise RAG Platform
 
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://enterprise-rag-platform.vercel.app)
+
+[▶ Live demo](https://enterprise-rag-platform.vercel.app) · [🚀 Deploy guide](docs/LIVE_DEMO.md) · [Ecosystem map](docs/ECOSYSTEM.md)
+
 Production RAG is a governed intelligence system, not a vector database wrapper. This project is a reference implementation and architecture package for an enterprise retrieval-augmented generation platform with access-aware retrieval, context engineering, evaluation, guardrails, observability, and operational decision records.
 
 ## Architecture Principles

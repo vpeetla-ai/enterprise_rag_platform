@@ -1,4 +1,6 @@
 {
+  "framework": null,
+  "installCommand": "echo 'static demo'",
   "buildCommand": "echo 'enterprise rag demo'",
   "outputDirectory": "demo",
   "rewrites": [

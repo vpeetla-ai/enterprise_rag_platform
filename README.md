@@ -67,9 +67,10 @@ flowchart LR
   Ingestion --> Retrieval
   Gateway --> Obs["EventRecorder spans"]
   Orchestrator --> Eval["Golden fixtures + eval/metrics"]
+  Obs --> OTLP["OTLP collector<br/>OTEL_EXPORTER_OTLP_ENDPOINT"]
 ```
 
-*Solid boxes are implemented in this reference package. Vector store, graph, OTel exporters, and LLM routers are extension points documented in ADRs.*
+*Solid boxes are implemented. LLM routers and managed observability backends are extension points documented in ADRs.*
 
 ## Runtime Request Flow
 
@@ -97,7 +98,8 @@ sequenceDiagram
   M-->>API: Answer draft
   API->>G: Validate citations and output policy
   API->>E: Sample/judge quality signals
-  API->>O: Trace, latency, token, cost, risk events
+  API->>O: Trace spans + eval signals
+  O->>O: OTLP export (when configured)
   API-->>U: Answer + citations + risk_flags + trace
 ```
 

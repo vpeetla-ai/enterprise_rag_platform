@@ -27,6 +27,11 @@ flowchart TB
     RET["Retriever port"]
     GR["Guardrails"]
     EVAL["Offline metrics"]
+    TEL["EventRecorder spans"]
+  end
+
+  subgraph Obs["Observability"]
+    OTLP["OTLP / HTTP<br/>OTEL_EXPORTER_OTLP_ENDPOINT"]
   end
 
   Clients --> GW
@@ -35,6 +40,8 @@ flowchart TB
   PIPE --> RET
   PIPE --> GR
   PIPE --> EVAL
+  PIPE --> TEL
+  TEL -.-> OTLP
 ```
 
 ---
@@ -76,7 +83,7 @@ Principal + tenant context
 |------|-------------------|---------|
 | `Retriever` | `InMemoryHybridRetriever` | Qdrant / Pinecone adapter |
 | `Reranker` | `ScoreBoostReranker` | Cross-encoder |
-| Telemetry | `EventRecorder` in pipeline | OTLP exporter |
+| Telemetry | `EventRecorder` in pipeline | OTLP via `ops/otel_export.py` ✅ |
 | LLM synthesis | Configurable provider | Live path in prod deploy |
 
 ---

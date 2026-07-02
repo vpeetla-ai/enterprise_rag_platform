@@ -3,7 +3,7 @@
 
 
 <!-- vpeetla-tech-stack:start -->
-[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square)]() [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square)]() [![Qdrant](https://img.shields.io/badge/Qdrant-DC382D?style=flat-square)]() [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-326CE5?style=flat-square)]() [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square)]() [![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square)]() [![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square)]()
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square)]() [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square)]() [![Qdrant](https://img.shields.io/badge/Qdrant-DC382D?style=flat-square)]() [![Langfuse](https://img.shields.io/badge/Langfuse-6366F1?style=flat-square)]() [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square)]() [![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square)]() [![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square)]()
 <!-- vpeetla-tech-stack:end -->
 ## Agent skills (Cursor + Codex)
 
@@ -46,7 +46,8 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | Golden eval fixtures | **Implemented** | `tests/fixtures/golden_queries.json` |
 | Vector store adapter | **Implemented** | `QdrantHybridRetriever` behind `QDRANT_BACKEND=true` |
 | AegisAI gateway bridge | **Implemented** | `integrations/aegis_bridge.py` for ingest + high-risk answers |
-| OpenTelemetry exporters | **Implemented** | OTLP/HTTP via `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| OpenTelemetry exporters | **Removed** | Use **Langfuse** (`LANGFUSE_*`) — same as other platform repos |
+| Langfuse trace export | **Implemented** | `ops/langfuse_export.py` — pipeline spans + eval scores on `/v1/answer` |
 | Knowledge graph expansion | **Implemented** | `InMemoryGraphExpander` + ingest entity tagging |
 
 See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, AegisAI, and AgentOps.
@@ -67,10 +68,10 @@ flowchart LR
   Ingestion --> Retrieval
   Gateway --> Obs["EventRecorder spans"]
   Orchestrator --> Eval["Golden fixtures + eval/metrics"]
-  Obs --> OTLP["OTLP collector<br/>OTEL_EXPORTER_OTLP_ENDPOINT"]
+  Obs --> LF["Langfuse Cloud<br/>LANGFUSE_*"]
 ```
 
-*Solid boxes are implemented. LLM routers and managed observability backends are extension points documented in ADRs.*
+*Solid boxes are implemented. LLM routers are extension points documented in ADRs.*
 
 ## Runtime Request Flow
 
@@ -98,9 +99,9 @@ sequenceDiagram
   M-->>API: Answer draft
   API->>G: Validate citations and output policy
   API->>E: Sample/judge quality signals
-  API->>O: Trace spans + eval signals
-  O->>O: OTLP export (when configured)
-  API-->>U: Answer + citations + risk_flags + trace
+  API->>O: Pipeline spans + eval signals
+  O->>O: Langfuse export (when LANGFUSE_* set)
+  API-->>U: Answer + citations + risk_flags + trace + langfuse_export
 ```
 
 ## Data and Knowledge Lifecycle
@@ -214,7 +215,7 @@ API surface:
 - Replace `InMemoryHybridRetriever` with OpenSearch plus vector-store and graph adapters.
 - Add a cross-encoder reranker and query rewrite service.
 - Add embedding/model version tables and blue-green index deployment.
-- Integrate OpenTelemetry exporters, SIEM audit sinks, and cost dashboards.
+- Integrate SIEM audit sinks and cost dashboards (optional — Langfuse covers trace-linked LLMOps today).
 - Add prompt/version CI gates with golden datasets.
 - Add human approval workflows for destructive or regulated actions.
 - Add content retention, legal hold, and source-of-truth ownership workflows.

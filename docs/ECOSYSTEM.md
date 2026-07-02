@@ -65,8 +65,7 @@ flowchart TB
 | Hybrid in-memory retrieval | Implemented (`InMemoryHybridRetriever`) |
 | Reranker port + reference reranker | Implemented (`ScoreBoostReranker`) |
 | Pipeline telemetry spans | Implemented (`EventRecorder` wired in `RagPipeline`) |
-| OTLP export (`ops/otel_export.py`) | Implemented — set `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| Managed OTel backend (Datadog/Grafana) | Planned — wire collector in infra |
+| Langfuse export (`ops/langfuse_export.py`) | Implemented — set `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` |
 | Vector DB / graph adapters | Implemented behind ports (`QdrantHybridRetriever`, `InMemoryGraphExpander`) |
 | HTTP API (`/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies`) | Implemented |
 | Cross-encoder reranker | Planned — plug into `Reranker` protocol |

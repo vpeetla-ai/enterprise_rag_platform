@@ -18,6 +18,19 @@ npx vercel alias set <deployment-url> enterprise-rag-platform.vercel.app
 
 > **Note:** If Render assigns a different hostname (e.g. `enterprise-rag-api-4el1.onrender.com`), update `demo/vercel.json` rewrite destination and redeploy the Vercel demo. `GET /` returns 404 by design — use `/health` or `/v1/answer`.
 
+## Observability (Langfuse)
+
+Set in Render dashboard (see `render.yaml`):
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLED=true
+```
+
+After `POST /v1/answer`, check response field `langfuse_export` (`exported` | `skipped` | `failed`) and Langfuse → **Traces** → project `enterprise-rag-platform`.
+
 ## Try locally
 
 ```bash

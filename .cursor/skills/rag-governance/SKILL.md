@@ -32,7 +32,7 @@ query → embed → vector + BM25 → merge (hybrid_alpha) → rerank → top_k
 
 ## Reference
 
-- `enterprise_rag_platform` — Qdrant adapter, OTLP export
+- `enterprise_rag_platform` — Qdrant adapter, Langfuse export on `/v1/answer`
 - `loop-engine-agent-platform/src/loop_engine/rag/`
 
 ## Tests

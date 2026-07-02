@@ -28,7 +28,7 @@ from enterprise_rag.core.pipeline import RagPipeline
 from enterprise_rag.core.reranker import ScoreBoostReranker
 from enterprise_rag.core.retrieval import InMemoryHybridRetriever
 from enterprise_rag.integrations.aegis_bridge import authorize_high_risk_answer, authorize_ingest
-from enterprise_rag.ops.otel_export import export_recorder
+from enterprise_rag.ops.langfuse_export import export_recorder
 from enterprise_rag.ops.telemetry import EventRecorder
 
 
@@ -251,7 +251,15 @@ if FastAPI is not None:
         )
         case_id = request.case_id or f"rag-{request.tenant_id}-{uuid.uuid4().hex[:8]}"
         gateway = authorize_high_risk_answer(case_id=case_id, risk_flags=result.risk_flags)
-        otel_status = export_recorder(state.recorder)
+        langfuse_status = export_recorder(
+            state.recorder,
+            metadata={"tenant_id": request.tenant_id, "case_id": case_id},
+            eval_scores={
+                "grounded": result.grounded,
+                "citation_count": len(result.citations),
+                "human_approval_required": "human_approval_required" in result.risk_flags,
+            },
+        )
         return {
             "answer": result.answer,
             "grounded": result.grounded,
@@ -268,7 +276,7 @@ if FastAPI is not None:
             ],
             "trace": state.recorder.events,
             "gateway": _gateway_payload(gateway),
-            "otel_export": otel_status,
+            "langfuse_export": langfuse_status,
         }
 else:
     app = None

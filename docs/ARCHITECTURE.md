@@ -31,7 +31,7 @@ flowchart TB
   end
 
   subgraph Obs["Observability"]
-    OTLP["OTLP / HTTP<br/>OTEL_EXPORTER_OTLP_ENDPOINT"]
+    LF["Langfuse Cloud<br/>LANGFUSE_*"]
   end
 
   Clients --> GW
@@ -41,7 +41,7 @@ flowchart TB
   PIPE --> GR
   PIPE --> EVAL
   PIPE --> TEL
-  TEL -.-> OTLP
+  TEL -.-> LF
 ```
 
 ---
@@ -83,7 +83,7 @@ Principal + tenant context
 |------|-------------------|---------|
 | `Retriever` | `InMemoryHybridRetriever` | Qdrant / Pinecone adapter |
 | `Reranker` | `ScoreBoostReranker` | Cross-encoder |
-| Telemetry | `EventRecorder` in pipeline | OTLP via `ops/otel_export.py` ✅ |
+| Telemetry | `EventRecorder` in pipeline | Langfuse via `ops/langfuse_export.py` ✅ |
 | LLM synthesis | Configurable provider | Live path in prod deploy |
 
 ---
@@ -110,10 +110,10 @@ Principal + tenant context
 | HTTP API (`/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies`) | ✅ |
 | Vector DB / graph backends | 🟡 Behind ports only |
 | Cross-encoder reranker | 🟡 Plug into `Reranker` |
-| OTLP export | ✅ | `ops/otel_export.py` — set `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| Langfuse export | ✅ | `ops/langfuse_export.py` — set `LANGFUSE_*` on Render |
 | Online eval feedback loop | 🟡 Offline metrics in `eval/metrics.py` |
 
-Canonical org pattern for Langfuse repos: [TRACE_LINKED_OBSERVABILITY](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/docs/TRACE_LINKED_OBSERVABILITY.md). This repo uses **OTLP** as primary export.
+Canonical org pattern: [TRACE_LINKED_OBSERVABILITY](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/docs/TRACE_LINKED_OBSERVABILITY.md). Pipeline spans export to Langfuse with eval scores (`grounded`, `citation_count`, `human_approval_required`).
 
 ---
 

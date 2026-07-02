@@ -29,4 +29,4 @@ The code keeps the domain pipeline independent from concrete vendors. Production
 - search engines such as OpenSearch, Elasticsearch, or Azure AI Search
 - graph stores such as Neo4j, Neptune, or native RDF stores
 - model providers and self-hosted inference endpoints
-- observability backends such as OpenTelemetry, Datadog, Grafana, or cloud-native tracing
+- observability via **Langfuse** (trace-linked spans + eval scores); OTLP/Datadog/Grafana optional later for infra teams

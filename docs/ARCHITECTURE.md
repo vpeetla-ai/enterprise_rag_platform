@@ -106,6 +106,8 @@ Principal + tenant context
 | OTLP export | ✅ | `ops/otel_export.py` — set `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | Online eval feedback loop | 🟡 Offline metrics in `eval/metrics.py` |
 
+Canonical org pattern for Langfuse repos: [TRACE_LINKED_OBSERVABILITY](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/docs/TRACE_LINKED_OBSERVABILITY.md). This repo uses **OTLP** as primary export.
+
 ---
 
 ## Deployment topology

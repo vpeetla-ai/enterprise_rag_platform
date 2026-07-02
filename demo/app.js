@@ -151,10 +151,13 @@ function buildStrategyCard(strategy, retrieveData, answerData) {
   const trace = answerData.trace || [];
   const hits = retrieveData.hits || [];
   const answer = answerData.answer || "(no answer)";
+  const source = answerData.citations?.[0]?.title || "—";
+  const topHit = hits[0]?.title || "—";
   card.innerHTML = `
     <h3>${strategy.label}</h3>
     <div class="strategy-meta">${strategyMeta(strategy)}</div>
     <div class="pipeline">${pipelineHtml(trace)}</div>
+    <div class="strategy-meta">Top hit: <strong>${topHit}</strong> · Answer from: <strong>${source}</strong></div>
     <strong>Top hits</strong>
     ${hitsHtml(hits)}
     <strong>Answer</strong>

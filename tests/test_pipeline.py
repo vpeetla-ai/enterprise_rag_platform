@@ -78,6 +78,48 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("sensitive_input_redacted", answer.risk_flags)
         self.assertIn("human_approval_required", answer.risk_flags)
 
+    def test_uploaded_bio_outranks_generic_policy_for_name_query(self) -> None:
+        policy = make_document(
+            "policy-001",
+            "Production RAG requires hybrid retrieval, grounded citations, access control, and evaluation.",
+        )
+        policy = SourceDocument(
+            document_id="policy-001",
+            tenant_id="acme",
+            title="Enterprise RAG Production Policy",
+            body=policy.body,
+            uri=policy.uri,
+            owner=policy.owner,
+            classification=policy.classification,
+            allowed_groups=policy.allowed_groups,
+            metadata=policy.metadata,
+            updated_at=policy.updated_at,
+        )
+        bio = SourceDocument(
+            document_id="venkata-bio",
+            tenant_id="acme",
+            title="Venkata_Peetla",
+            body=(
+                "Venkata Peetla is Principal Enterprise AI Architect. "
+                "He leads governed agent systems, RAG platforms, and AegisAI integrations."
+            ),
+            uri="upload://venkata.pdf",
+            owner="demo-user",
+            classification=Classification.INTERNAL,
+            allowed_groups=frozenset({"engineering", "ai-platform"}),
+            metadata={"source": "demo-upload"},
+            updated_at=datetime.now(UTC),
+        )
+        chunker = DocumentChunker(max_words=60, overlap_words=5)
+        chunks = chunker.chunk(policy).chunks + chunker.chunk(bio).chunks
+        principal = Principal("demo-user", "acme", frozenset({"engineering", "ai-platform"}))
+        pipeline = RagPipeline(InMemoryHybridRetriever(chunks))
+
+        answer = pipeline.answer(RetrievalQuery("who is Venkata?", "acme", principal))
+
+        self.assertIn("Venkata Peetla", answer.answer)
+        self.assertEqual(answer.citations[0].title, "Venkata_Peetla")
+
 
 if __name__ == "__main__":
     unittest.main()

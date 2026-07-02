@@ -39,4 +39,12 @@ class GuardrailService:
         if mentioned - citation_ids:
             flags.append("unknown_citation")
         grounded = bool(mentioned) and not (mentioned - citation_ids)
-        return Answer(answer=answer, citations=context.citations, grounded=grounded, risk_flags=tuple(flags))
+        used_citations = tuple(c for c in context.citations if c.citation_id in mentioned)
+        if not used_citations and context.citations:
+            used_citations = (context.citations[0],)
+        return Answer(
+            answer=answer,
+            citations=used_citations,
+            grounded=grounded,
+            risk_flags=tuple(flags),
+        )

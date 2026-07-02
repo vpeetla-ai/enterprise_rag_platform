@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import math
-import re
 from collections import Counter
 from datetime import UTC, datetime
 
 from enterprise_rag.core.access import AccessPolicy
 from enterprise_rag.core.models import Chunk, RetrievalHit, RetrievalMode, RetrievalQuery
-
-
-def _tokens(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9][a-z0-9_-]*", text.lower())
+from enterprise_rag.core.text import query_terms, tokenize
 
 
 class InMemoryHybridRetriever:
@@ -35,14 +31,14 @@ class InMemoryHybridRetriever:
         return len(chunks)
 
     def search(self, query: RetrievalQuery) -> tuple[RetrievalHit, ...]:
-        query_terms = _tokens(query.query)
+        terms = query_terms(query.query)
         hits: list[RetrievalHit] = []
         for chunk in self._chunks:
             if not self._access_policy.can_read(query.principal, chunk):
                 continue
             if not self._matches_filters(query.filters, chunk):
                 continue
-            score, reasons = self._score(query_terms, chunk, query.mode)
+            score, reasons = self._score(terms, chunk, query.mode)
             if score > 0:
                 hits.append(RetrievalHit(chunk=chunk, score=score, reasons=tuple(reasons)))
 
@@ -50,11 +46,14 @@ class InMemoryHybridRetriever:
         return tuple(hits[: query.top_k])
 
     def _score(
-        self, query_terms: list[str], chunk: Chunk, mode: RetrievalMode
+        self, terms: list[str], chunk: Chunk, mode: RetrievalMode
     ) -> tuple[float, list[str]]:
-        chunk_terms = _tokens(chunk.text + " " + " ".join(chunk.metadata.values()))
-        lexical = self._bm25_like(query_terms, chunk_terms)
-        semantic = self._semantic_proxy(query_terms, chunk_terms)
+        chunk_terms = tokenize(
+            f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"
+        )
+        title_terms = set(tokenize(chunk.source_title))
+        lexical = self._bm25_like(terms, chunk_terms)
+        semantic = self._semantic_proxy(terms, chunk_terms)
         recency = self._recency_boost(chunk.updated_at)
         score = 0.0
         reasons: list[str] = []
@@ -67,6 +66,10 @@ class InMemoryHybridRetriever:
             score += semantic * 0.30
             if semantic:
                 reasons.append("semantic_similarity")
+        title_overlap = len(set(terms) & title_terms)
+        if title_overlap:
+            score += title_overlap * 0.5
+            reasons.append("title_match")
         if score > 0 and recency:
             score += recency * 0.05
             reasons.append("freshness_boost")
@@ -106,5 +109,7 @@ class InMemoryHybridRetriever:
     def _build_doc_freq(chunks: tuple[Chunk, ...]) -> dict[str, int]:
         freq: Counter[str] = Counter()
         for chunk in chunks:
-            freq.update(set(_tokens(chunk.text + " " + " ".join(chunk.metadata.values()))))
+            freq.update(
+                set(tokenize(f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"))
+            )
         return dict(freq)

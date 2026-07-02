@@ -10,6 +10,7 @@ from enterprise_rag.core.guardrails import GuardrailService
 from enterprise_rag.core.models import Answer, RetrievalHit, RetrievalQuery
 from enterprise_rag.core.reranker import Reranker
 from enterprise_rag.core.retriever import Retriever
+from enterprise_rag.core.text import query_terms, tokenize
 from enterprise_rag.ops.telemetry import EventRecorder
 
 
@@ -24,10 +25,28 @@ class ExtractiveGenerator:
     def generate(self, query: str, context: str) -> str:
         if not context:
             return "I do not have enough authorized context to answer."
-        first_source = context.split("\n\n", maxsplit=1)[0]
-        citation = first_source.split("]", maxsplit=1)[0].lstrip("[")
-        evidence = first_source.split("\n")[-1]
-        return f"{evidence} [{citation}]"
+        terms = set(query_terms(query))
+        best_section = ""
+        best_score = -1.0
+        best_citation = "S1"
+        for section in context.split("\n\n"):
+            if not section.strip():
+                continue
+            lines = section.split("\n")
+            header = lines[0] if lines else ""
+            body = "\n".join(lines[2:]) if len(lines) > 2 else lines[-1]
+            title_part = header.split("]", 1)[-1].strip() if header.startswith("[") else header
+            section_score = len(terms & set(tokenize(f"{title_part} {body}")))
+            section_score += len(terms & set(tokenize(title_part))) * 2
+            if section_score > best_score:
+                best_score = section_score
+                best_section = section
+                best_citation = header.split("]", 1)[0].lstrip("[") if header.startswith("[") else "S1"
+        if not best_section:
+            best_section = context.split("\n\n", maxsplit=1)[0]
+            best_citation = best_section.split("]", 1)[0].lstrip("[") if best_section.startswith("[") else "S1"
+        evidence = best_section.split("\n")[-1]
+        return f"{evidence} [{best_citation}]"
 
 
 class RagPipeline:

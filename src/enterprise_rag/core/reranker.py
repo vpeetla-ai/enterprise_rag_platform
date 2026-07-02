@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import re
 from typing import Protocol
 
 from enterprise_rag.core.models import RetrievalHit
+from enterprise_rag.core.text import query_terms, tokenize
 
 
 class Reranker(Protocol):
@@ -15,25 +15,22 @@ class Reranker(Protocol):
         ...
 
 
-def _tokens(text: str) -> set[str]:
-    return set(re.findall(r"[a-z0-9][a-z0-9_-]*", text.lower()))
-
-
 class ScoreBoostReranker:
     """Reference reranker — boosts hits with title/metadata term overlap (no ML deps)."""
 
     def rerank(
         self, query: str, hits: tuple[RetrievalHit, ...], limit: int
     ) -> tuple[RetrievalHit, ...]:
-        if len(hits) <= limit:
+        if not hits:
             return hits
-        q = _tokens(query)
+        q = set(query_terms(query))
         rescored: list[tuple[float, RetrievalHit]] = []
         for hit in hits:
             meta_text = " ".join(str(v) for v in hit.chunk.metadata.values())
-            title = str(hit.chunk.metadata.get("title", hit.chunk.document_id))
-            overlap = len(q & _tokens(f"{title} {meta_text} {hit.chunk.text[:200]}"))
-            boost = hit.score + overlap * 0.15
+            title = hit.chunk.source_title
+            overlap = len(q & set(tokenize(f"{title} {meta_text} {hit.chunk.text[:300]}")))
+            title_overlap = len(q & set(tokenize(title)))
+            boost = hit.score + overlap * 0.2 + title_overlap * 0.6
             rescored.append((boost, hit))
         rescored.sort(key=lambda x: x[0], reverse=True)
         return tuple(h for _, h in rescored[:limit])

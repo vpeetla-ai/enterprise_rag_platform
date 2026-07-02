@@ -44,6 +44,7 @@ class QueryRequest(BaseModel):  # type: ignore[misc]
     mode: RetrievalMode = RetrievalMode.HYBRID
     top_k: int = 5
     rerank: bool = True
+    agentic: bool = True
     case_id: str | None = None
 
 
@@ -244,7 +245,7 @@ if FastAPI is not None:
         pipeline = RagPipeline(
             state.retriever,
             reranker=ScoreBoostReranker() if request.rerank else None,
-            graph_expander=state.graph_expander,
+            graph_expander=state.graph_expander if request.agentic else None,
             recorder=state.recorder,
         )
         result = pipeline.answer(

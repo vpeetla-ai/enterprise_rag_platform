@@ -108,26 +108,46 @@ class AppState:
         return tuple(tagged)
 
     def _seed_demo_corpus(self) -> None:
-        document = SourceDocument(
-            document_id="policy-001",
-            tenant_id="acme",
-            title="Enterprise RAG Production Policy",
-            body=(
-                "Production RAG requires hybrid retrieval, access-aware filtering, grounded citations, "
-                "evaluation, observability, and human approval for high-risk actions. Retrieval strategy "
-                "is the architecture decision; vector database selection is an implementation decision."
+        documents = [
+            SourceDocument(
+                document_id="policy-001",
+                tenant_id="acme",
+                title="Enterprise RAG Production Policy",
+                body=(
+                    "Production RAG requires hybrid retrieval, access-aware filtering, grounded citations, "
+                    "evaluation, observability, and human approval for high-risk actions. Retrieval strategy "
+                    "is the architecture decision; vector database selection is an implementation decision."
+                ),
+                uri="https://example.internal/policies/rag-production",
+                owner="ai-platform",
+                classification=Classification.INTERNAL,
+                allowed_groups=frozenset({"engineering", "ai-platform"}),
+                metadata={"effective_date": "2026-01-01", "domain": "ai"},
+                updated_at=datetime.now(UTC),
             ),
-            uri="https://example.internal/policies/rag-production",
-            owner="ai-platform",
-            classification=Classification.INTERNAL,
-            allowed_groups=frozenset({"engineering", "ai-platform"}),
-            metadata={"effective_date": "2026-01-01", "domain": "ai"},
-            updated_at=datetime.now(UTC),
-        )
-        chunks = DocumentChunker(max_words=80, overlap_words=10).chunk(document).chunks
-        chunks = self._tag_chunks(chunks)
-        self.retriever.upsert(chunks)
-        self._all_chunks.extend(chunks)
+            SourceDocument(
+                document_id="zephyr-policy-2026",
+                tenant_id="acme",
+                title="Zephyr Cloud Security Policy",
+                body=(
+                    "Zephyr Corporation requires all production deployments to pass AegisAI gateway approval "
+                    "before email or Slack notifications. The mandatory rotation period for API keys is 90 days. "
+                    "Engineering teams must enable hybrid retrieval with citation grounding for customer-facing "
+                    "answers. Incident response playbooks require human approval for restricted documents."
+                ),
+                uri="demo://fixtures/zephyr-policy.txt",
+                owner="demo-user",
+                classification=Classification.INTERNAL,
+                allowed_groups=frozenset({"engineering", "ai-platform"}),
+                metadata={"source": "demo-fixture", "domain": "security"},
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+        for document in documents:
+            chunks = DocumentChunker(max_words=80, overlap_words=10).chunk(document).chunks
+            chunks = self._tag_chunks(chunks)
+            self.retriever.upsert(chunks)
+            self._all_chunks.extend(chunks)
 
 
 def _gateway_payload(decision: Any) -> dict[str, Any]:

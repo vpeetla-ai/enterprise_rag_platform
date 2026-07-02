@@ -1,0 +1,7 @@
+Zephyr Corporation Cloud Security Policy (2026)
+
+All production deployments must pass AegisAI gateway approval before email or Slack notifications are sent.
+
+The mandatory rotation period for API keys is 90 days. Engineering teams must enable hybrid retrieval with citation grounding for all customer-facing answers.
+
+Incident response playbooks require human approval for restricted documents and confidential customer data.

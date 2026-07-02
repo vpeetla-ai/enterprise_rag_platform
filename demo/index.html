@@ -16,30 +16,33 @@
 
       <section class="panel">
         <h2>Add your document</h2>
-        <p class="muted">Upload a PDF or plain-text file. Text is extracted in the browser and ingested via <code>/v1/ingest</code>.</p>
+        <p class="muted">Upload a PDF or plain-text file, or load the bundled sample. Text is sent to <code>/v1/ingest</code> (in-memory on Render — re-ingest after cold starts).</p>
         <label for="docTitle">Document title</label>
         <input id="docTitle" type="text" placeholder="e.g. Q3 security policy" />
         <label for="docFile">PDF or .txt file</label>
         <input id="docFile" type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" />
-        <div class="row row-3">
+        <div class="row row-actions">
           <button id="ingest" type="button">Ingest document</button>
-          <span id="ingestStatus" class="muted ingest-status"></span>
+          <button id="loadSample" type="button" class="ghost">Load sample document</button>
         </div>
+        <span id="ingestStatus" class="muted ingest-status"></span>
       </section>
 
       <section class="panel">
         <label for="query">Enterprise question</label>
-        <textarea id="query" rows="3">Why does production RAG need evaluation and human approval?</textarea>
+        <textarea id="query" rows="3">What is the mandatory API key rotation period at Zephyr Corporation?</textarea>
         <label for="ragMode">Retrieval strategy</label>
         <select id="ragMode">
           <option value="regular">Regular RAG (keyword, no graph)</option>
           <option value="hybrid" selected>Hybrid RAG (lexical + semantic)</option>
           <option value="agentic">Agentic RAG (hybrid + graph expansion)</option>
         </select>
-        <div class="row">
+        <div class="row row-actions">
           <button id="ask" type="button">Ask with governance</button>
           <button id="retrieve" type="button" class="ghost">Retrieve only</button>
+          <button id="testAll" type="button" class="ghost">Test all 3 strategies</button>
         </div>
+        <p class="muted api-hint">API: <span id="apiUrl"></span></p>
       </section>
 
       <section class="grid">
@@ -62,6 +65,7 @@
     </main>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="config.js"></script>
+    <script>document.getElementById("apiUrl").textContent = window.ENTERPRISE_RAG_API || "/api";</script>
     <script src="app.js"></script>
   </body>
 </html>

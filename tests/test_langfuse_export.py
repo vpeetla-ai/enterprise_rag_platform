@@ -29,9 +29,11 @@ class LangfuseExportTests(unittest.TestCase):
     @patch("langfuse.Langfuse")
     def test_export_success(self, mock_langfuse_cls: MagicMock) -> None:
         mock_client = MagicMock()
-        mock_trace = MagicMock()
+        mock_root = MagicMock()
+        mock_child = MagicMock()
         mock_langfuse_cls.return_value = mock_client
-        mock_client.trace.return_value = mock_trace
+        mock_client.create_trace_id.return_value = "trace-abc"
+        mock_client.start_observation.side_effect = [mock_root, mock_child]
 
         rec = EventRecorder()
         rec.record("rag.retrieve", duration_ms=12, tenant="acme")
@@ -41,9 +43,9 @@ class LangfuseExportTests(unittest.TestCase):
             eval_scores={"grounded": True, "citation_count": 3},
         )
         self.assertEqual(status, "exported")
-        mock_client.trace.assert_called_once()
-        mock_trace.span.assert_called()
-        mock_client.score.assert_called()
+        mock_client.create_trace_id.assert_called_once()
+        self.assertGreaterEqual(mock_client.start_observation.call_count, 2)
+        mock_client.create_score.assert_called()
         mock_client.flush.assert_called_once()
 
     @patch.dict(

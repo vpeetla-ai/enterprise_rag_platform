@@ -1,4 +1,4 @@
-const API = window.ENTERPRISE_RAG_API || "/api";
+const API = (window.ENTERPRISE_RAG_API || "/api").replace(/\/$/, "");
 
 const payload = (query) => ({
   query,

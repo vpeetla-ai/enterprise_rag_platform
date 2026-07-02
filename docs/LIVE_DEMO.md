@@ -1,8 +1,12 @@
 # Live Demo — Enterprise RAG Platform
 
+**Live demo (vpeetla-ai team):** [enterprise-rag-platform-eta.vercel.app](https://enterprise-rag-platform-eta.vercel.app)
+
+> `enterprise-rag-platform.vercel.app` may point at a stale deployment. The team URL above uses [`demo/config.js`](../demo/config.js) to call Render directly (CORS enabled on API).
+
 | Surface | URL |
 |---------|-----|
-| **UI (Vercel)** | https://enterprise-rag-platform.vercel.app |
+| **UI (Vercel)** | https://enterprise-rag-platform-eta.vercel.app |
 | **API (Render)** | https://enterprise-rag-api-4el1.onrender.com |
 
 ## Deploy

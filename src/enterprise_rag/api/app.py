@@ -13,10 +13,12 @@ from typing import Any
 
 try:
     from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel, Field
 except ImportError:  # pragma: no cover
     FastAPI = None  # type: ignore[assignment]
     HTTPException = Exception  # type: ignore[assignment,misc]
+    CORSMiddleware = None  # type: ignore[assignment,misc]
     BaseModel = object  # type: ignore[assignment,misc]
     Field = lambda *args, **kwargs: None  # type: ignore[assignment,misc]
 
@@ -139,6 +141,12 @@ def _gateway_payload(decision: Any) -> dict[str, Any]:
 
 if FastAPI is not None:
     app = FastAPI(title="Enterprise RAG Platform", version="0.3.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     state = AppState()
 
     @app.get("/health")

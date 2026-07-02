@@ -18,6 +18,8 @@ const STRATEGIES = [
   { id: "agentic", mode: "hybrid", rerank: true, agentic: true, label: "Agentic RAG" },
 ];
 
+const PIPELINE_STEPS = ["rag.retrieve", "rag.graph_expand", "rag.rerank", "rag.generate"];
+
 function strategyFromUi() {
   const choice = document.getElementById("ragMode").value;
   return STRATEGIES.find((s) => s.id === choice) || STRATEGIES[1];
@@ -37,10 +39,31 @@ const payload = (query, strategy = strategyFromUi()) => ({
   agentic: strategy.agentic,
 });
 
+function showSingleMode() {
+  document.getElementById("singleResult").classList.remove("hidden");
+  document.getElementById("compareResults").classList.add("hidden");
+  document.querySelector("#trace")?.closest(".panel")?.classList.remove("hidden");
+}
+
+function showCompareMode() {
+  document.getElementById("singleResult").classList.add("hidden");
+  document.getElementById("compareResults").classList.remove("hidden");
+  document.querySelector("#trace")?.closest(".panel")?.classList.add("hidden");
+}
+
+function clearSingleResults() {
+  document.getElementById("answer").textContent = "";
+  document.getElementById("citations").innerHTML = "";
+  document.getElementById("riskFlags").innerHTML = "";
+  document.getElementById("trace").textContent = "";
+  document.getElementById("activeQuery").classList.add("hidden");
+  document.getElementById("activeQuery").textContent = "";
+}
+
 async function wakeApi(maxAttempts = 4) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const res = await fetch(`${API}/health`, { signal: AbortSignal.timeout(45000) });
+      const res = await fetch(`${API}/health`, { signal: AbortSignal.timeout(45000), cache: "no-store" });
       if (res.ok) return true;
     } catch {
       /* Render cold start */
@@ -50,43 +73,45 @@ async function wakeApi(maxAttempts = 4) {
   return false;
 }
 
-async function callAnswer(query, strategy) {
-  const response = await fetch(`${API}/v1/answer`, {
+async function apiPost(path, body) {
+  const response = await fetch(`${API}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload(query, strategy)),
+    body: JSON.stringify(body),
+    cache: "no-store",
     signal: AbortSignal.timeout(60000),
   });
   const text = await response.text();
   if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
   return JSON.parse(text);
+}
+
+async function callAnswer(query, strategy) {
+  return apiPost("/v1/answer", payload(query, strategy));
 }
 
 async function callRetrieve(query, strategy) {
-  const response = await fetch(`${API}/v1/retrieve`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload(query, strategy)),
-    signal: AbortSignal.timeout(60000),
-  });
-  const text = await response.text();
-  if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
-  return JSON.parse(text);
+  return apiPost("/v1/retrieve", payload(query, strategy));
 }
 
-function render(data, mode) {
+function render(data, mode, query) {
+  showSingleMode();
+  clearSingleResults();
   document.getElementById("status").textContent = mode;
+  if (query) {
+    const qEl = document.getElementById("activeQuery");
+    qEl.textContent = `Question: ${query}`;
+    qEl.classList.remove("hidden");
+  }
   const answer = data.answer || JSON.stringify(data.hits?.slice(0, 3), null, 2);
   document.getElementById("answer").textContent = answer;
   const citations = document.getElementById("citations");
-  citations.innerHTML = "";
   (data.citations || []).forEach((c) => {
     const li = document.createElement("li");
     li.innerHTML = `<strong>${c.title}</strong><br/><a href="${c.uri}" target="_blank" rel="noreferrer">${c.uri}</a>`;
     citations.appendChild(li);
   });
   const flags = document.getElementById("riskFlags");
-  flags.innerHTML = "";
   (data.risk_flags || []).forEach((flag) => {
     const span = document.createElement("span");
     span.className = "flag";
@@ -94,6 +119,48 @@ function render(data, mode) {
     flags.appendChild(span);
   });
   document.getElementById("trace").textContent = JSON.stringify(data.trace || data, null, 2);
+}
+
+function pipelineHtml(trace) {
+  const ran = new Set((trace || []).map((e) => e.name));
+  return PIPELINE_STEPS.map((step) => {
+    const cls = ran.has(step) ? "on" : "off";
+    const label = step.replace("rag.", "");
+    return `<span class="${cls}">${label}</span>`;
+  }).join(" → ");
+}
+
+function hitsHtml(hits) {
+  if (!hits?.length) return "<em>No retrieval hits</em>";
+  return `<ul class="hits">${hits
+    .slice(0, 3)
+    .map(
+      (h) =>
+        `<li><strong>${h.title || h.chunk?.source_title || "?"}</strong> — score ${Number(h.score).toFixed(2)}<br/><span>${(h.text || "").slice(0, 90)}…</span></li>`
+    )
+    .join("")}</ul>`;
+}
+
+function strategyMeta(strategy) {
+  return `mode=${strategy.mode} · rerank=${strategy.rerank} · graph=${strategy.agentic}`;
+}
+
+function buildStrategyCard(strategy, retrieveData, answerData) {
+  const card = document.createElement("article");
+  card.className = "strategy-card";
+  const trace = answerData.trace || [];
+  const hits = retrieveData.hits || [];
+  const answer = answerData.answer || "(no answer)";
+  card.innerHTML = `
+    <h3>${strategy.label}</h3>
+    <div class="strategy-meta">${strategyMeta(strategy)}</div>
+    <div class="pipeline">${pipelineHtml(trace)}</div>
+    <strong>Top hits</strong>
+    ${hitsHtml(hits)}
+    <strong>Answer</strong>
+    <div class="card-answer">${answer}</div>
+  `;
+  return card;
 }
 
 async function extractFileText(file) {
@@ -129,23 +196,15 @@ async function ingestBody({ title, body, filename = "upload.txt" }) {
   }
   const documentId = `upload-${Date.now()}`;
   status.textContent = "Ingesting via API…";
-  const response = await fetch(`${API}/v1/ingest`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...basePayload(),
-      document_id: documentId,
-      title,
-      body: body.slice(0, 50000),
-      uri: `upload://${filename}`,
-      owner: "demo-user",
-      metadata: { source: "demo-upload", filename },
-    }),
-    signal: AbortSignal.timeout(60000),
+  const data = await apiPost("/v1/ingest", {
+    ...basePayload(),
+    document_id: documentId,
+    title,
+    body: body.slice(0, 50000),
+    uri: `upload://${filename}`,
+    owner: "demo-user",
+    metadata: { source: "demo-upload", filename },
   });
-  const text = await response.text();
-  if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
-  const data = JSON.parse(text);
   status.textContent = `Ingested "${title}" — ${data.chunks_added} chunks added.`;
   document.getElementById("query").value = SAMPLE_DOC.sampleQuery;
   return data;
@@ -171,72 +230,102 @@ async function loadSampleDocument() {
   status.textContent = "Loading sample document…";
   document.getElementById("docTitle").value = SAMPLE_DOC.title;
   try {
-    const res = await fetch("fixtures/zephyr-policy.txt");
+    const res = await fetch("fixtures/zephyr-policy.txt", { cache: "no-store" });
     const body = res.ok ? await res.text() : SAMPLE_DOC.body;
     await ingestBody({ title: SAMPLE_DOC.title, body, filename: "zephyr-policy.txt" });
-  } catch (error) {
+  } catch {
     await ingestBody({ title: SAMPLE_DOC.title, body: SAMPLE_DOC.body, filename: "zephyr-policy.txt" });
   }
 }
 
 async function testAllStrategies() {
   const query = document.getElementById("query").value.trim() || SAMPLE_DOC.sampleQuery;
-  document.getElementById("query").value = query;
-  const status = document.getElementById("status");
-  status.textContent = "Waking API and testing all 3 strategies…";
+  showCompareMode();
+  clearSingleResults();
+  document.getElementById("compareStatus").textContent = "Waking API and testing all 3 strategies…";
+  document.getElementById("compareQuery").textContent = `Question: ${query}`;
+  document.getElementById("strategyCards").innerHTML = "";
+
   if (!(await wakeApi())) {
-    status.textContent = "API not reachable — wait 30s and retry";
+    document.getElementById("compareStatus").textContent = "API not reachable — wait 30s and retry";
     return;
   }
-  const results = [];
+
   for (const strategy of STRATEGIES) {
-    status.textContent = `Testing ${strategy.label}…`;
+    document.getElementById("compareStatus").textContent = `Testing ${strategy.label}…`;
     try {
-      const data = await callAnswer(query, strategy);
-      const cites = (data.citations || []).map((c) => c.title).join(", ") || "none";
-      const spans = (data.trace || []).map((e) => e.name).join(" → ");
-      results.push(
-        `【${strategy.label}】\n${data.answer}\nCitations: ${cites}\nTrace: ${spans}\n`
+      const [retrieveData, answerData] = await Promise.all([
+        callRetrieve(query, strategy),
+        callAnswer(query, strategy),
+      ]);
+      document.getElementById("strategyCards").appendChild(
+        buildStrategyCard(strategy, retrieveData, answerData)
       );
     } catch (error) {
-      results.push(`【${strategy.label}】 ERROR: ${error.message}\n`);
+      const card = document.createElement("article");
+      card.className = "strategy-card";
+      card.innerHTML = `<h3>${strategy.label}</h3><p class="muted">ERROR: ${error.message}</p>`;
+      document.getElementById("strategyCards").appendChild(card);
     }
   }
-  document.getElementById("answer").textContent = results.join("\n");
-  document.getElementById("status").textContent = "All 3 strategies tested — see combined results below";
-  document.getElementById("citations").innerHTML = "";
-  document.getElementById("riskFlags").innerHTML = "";
-  document.getElementById("trace").textContent = `API: ${API}\nQuery: ${query}`;
+  document.getElementById("compareStatus").textContent =
+    "Compare pipeline steps and hit scores — answer text may match when the same top chunk wins.";
 }
 
 document.getElementById("ask").addEventListener("click", async () => {
   const query = document.getElementById("query").value.trim();
+  if (!query) {
+    document.getElementById("status").textContent = "Enter a question first.";
+    return;
+  }
   const strategy = strategyFromUi();
+  showSingleMode();
+  clearSingleResults();
   document.getElementById("status").textContent = `Calling /v1/answer (${strategy.label})…`;
   try {
     if (!(await wakeApi())) throw new Error("API not reachable — Render may still be waking up");
     const data = await callAnswer(query, strategy);
     if (!data.answer?.trim() || data.answer.includes("do not have enough authorized context")) {
       document.getElementById("status").textContent =
-        `No matching chunks for your query — try the sample question or re-ingest your document (${strategy.label})`;
+        `No matching chunks — try keywords from your document (${strategy.label})`;
+      document.getElementById("activeQuery").textContent = `Question: ${query}`;
+      document.getElementById("activeQuery").classList.remove("hidden");
+      document.getElementById("answer").textContent =
+        "No authorized context found for this query. Re-ingest your document or use terms that appear in it.";
+      document.getElementById("trace").textContent = JSON.stringify(data.trace || [], null, 2);
     } else {
-      render(data, `Grounded answer — ${strategy.label}`);
+      render(data, `Grounded answer — ${strategy.label}`, query);
     }
   } catch (error) {
     document.getElementById("status").textContent = `API error: ${error.message}`;
+    document.getElementById("activeQuery").textContent = `Question: ${query}`;
+    document.getElementById("activeQuery").classList.remove("hidden");
+    document.getElementById("answer").textContent = "";
   }
 });
 
 document.getElementById("retrieve").addEventListener("click", async () => {
   const query = document.getElementById("query").value.trim();
+  if (!query) {
+    document.getElementById("status").textContent = "Enter a question first.";
+    return;
+  }
   const strategy = strategyFromUi();
+  showSingleMode();
+  clearSingleResults();
   document.getElementById("status").textContent = `Calling /v1/retrieve (${strategy.label})…`;
   try {
     if (!(await wakeApi())) throw new Error("API not reachable — Render may still be waking up");
     const data = await callRetrieve(query, strategy);
-    render({ hits: data.hits, trace: data }, `Retrieval hits — ${strategy.label} (${data.hits?.length || 0} hits)`);
+    render(
+      { hits: data.hits, trace: data },
+      `Retrieval hits — ${strategy.label} (${data.hits?.length || 0} hits)`,
+      query
+    );
   } catch (error) {
     document.getElementById("status").textContent = `API error: ${error.message}`;
+    document.getElementById("activeQuery").textContent = `Question: ${query}`;
+    document.getElementById("activeQuery").classList.remove("hidden");
   }
 });
 

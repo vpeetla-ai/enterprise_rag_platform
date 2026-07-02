@@ -45,10 +45,11 @@
         <p class="muted api-hint">API: <span id="apiUrl"></span></p>
       </section>
 
-      <section class="grid">
+      <section class="grid" id="singleResult">
         <article class="panel" id="answerPanel">
           <h2>Answer</h2>
           <p id="status" class="muted">Submit a query to call the live API (demo corpus seeded).</p>
+          <p id="activeQuery" class="query-label hidden"></p>
           <div id="answer" class="answer"></div>
         </article>
         <article class="panel">
@@ -56,6 +57,13 @@
           <ul id="citations"></ul>
           <div id="riskFlags" class="flags"></div>
         </article>
+      </section>
+
+      <section class="panel hidden" id="compareResults">
+        <h2>Strategy comparison</h2>
+        <p id="compareStatus" class="muted"></p>
+        <p id="compareQuery" class="query-label"></p>
+        <div id="strategyCards" class="strategy-grid"></div>
       </section>
 
       <section class="panel">

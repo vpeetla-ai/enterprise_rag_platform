@@ -7,16 +7,19 @@ dependencies and run `uvicorn enterprise_rag.api.app:app --reload` to expose thi
 from __future__ import annotations
 
 import os
+import secrets
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import Depends, FastAPI, Header, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel, Field
 except ImportError:  # pragma: no cover
+    Depends = None  # type: ignore[assignment]
     FastAPI = None  # type: ignore[assignment]
+    Header = None  # type: ignore[assignment]
     HTTPException = Exception  # type: ignore[assignment,misc]
     CORSMiddleware = None  # type: ignore[assignment,misc]
     BaseModel = object  # type: ignore[assignment,misc]
@@ -35,6 +38,13 @@ from enterprise_rag.ops.telemetry import EventRecorder
 
 
 class QueryRequest(BaseModel):  # type: ignore[misc]
+    """tenant_id/user_id/groups/clearance are client-asserted in this reference
+    implementation — nothing verifies the caller actually holds them. The
+    access-before-ranking check in core/access.py enforces whatever Principal it's
+    given, so a caller can claim any clearance/groups directly in this request body.
+    A real deployment MUST derive these fields from a verified identity token (JWT/OIDC
+    claims), never trust them from the request — see docs/adr/0004-api-auth-and-principal-trust.md."""
+
     query: str
     tenant_id: str
     user_id: str
@@ -49,6 +59,9 @@ class QueryRequest(BaseModel):  # type: ignore[misc]
 
 
 class IngestRequest(BaseModel):  # type: ignore[misc]
+    """tenant_id/owner/classification/groups are client-asserted — see QueryRequest's
+    docstring and docs/adr/0004-api-auth-and-principal-trust.md."""
+
     tenant_id: str
     document_id: str
     title: str
@@ -160,6 +173,18 @@ def _gateway_payload(decision: Any) -> dict[str, Any]:
     }
 
 
+def _require_api_key(x_api_key: Annotated[str | None, Header()] = None) -> None:
+    """Gate /v1/ingest, /v1/retrieve, /v1/answer. Only enforced when RAG_API_KEY is set
+    (dev/demo default stays open). Note: this only restricts who can call the API at
+    all — it does not verify the Principal claimed inside the request body. See
+    QueryRequest's docstring and docs/adr/0004-api-auth-and-principal-trust.md."""
+    expected = os.getenv("RAG_API_KEY")
+    if not expected:
+        return
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+
 if FastAPI is not None:
     app = FastAPI(title="Enterprise RAG Platform", version="0.3.0")
     app.add_middleware(
@@ -189,7 +214,7 @@ if FastAPI is not None:
             ],
         }
 
-    @app.post("/v1/retrieve")
+    @app.post("/v1/retrieve", dependencies=[Depends(_require_api_key)])
     def retrieve(request: QueryRequest) -> dict[str, Any]:
         principal = Principal(
             user_id=request.user_id,
@@ -224,7 +249,7 @@ if FastAPI is not None:
             ]
         }
 
-    @app.post("/v1/ingest")
+    @app.post("/v1/ingest", dependencies=[Depends(_require_api_key)])
     def ingest(request: IngestRequest) -> dict[str, Any]:
         case_id = request.case_id or f"ingest-{request.document_id}-{uuid.uuid4().hex[:8]}"
         gateway = authorize_ingest(case_id=case_id, document_id=request.document_id)
@@ -253,7 +278,7 @@ if FastAPI is not None:
             "gateway": _gateway_payload(gateway),
         }
 
-    @app.post("/v1/answer")
+    @app.post("/v1/answer", dependencies=[Depends(_require_api_key)])
     def answer(request: QueryRequest) -> dict[str, Any]:
         state.recorder.events.clear()
         principal = Principal(

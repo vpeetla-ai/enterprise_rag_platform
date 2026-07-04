@@ -12,6 +12,7 @@
 | Evaluation blind spots hide regressions | High | High | Golden datasets, online feedback sampling, retrieval and generation regression gates | Quality Engineering |
 | Vendor lock-in limits future migration | Medium | Medium | Ports/adapters for LLM, vector store, reranker, graph, telemetry | Architecture |
 | Real-time ingestion overloads indexes | Medium | Medium | Queue-based ingestion, backpressure, batch compaction, blue-green indexes | Data Platform |
+| Principal identity is client-asserted, not verified — full access-control bypass | High (until fixed) | Critical | Reference implementation only: `tenant_id`/`groups`/`clearance` come straight from the request body with no signature or session behind them, so the entire access-before-ranking enforcement in `core/access.py` trusts whatever the caller claims. `RAG_API_KEY` (see [ADR-0004](adr/0004-api-auth-and-principal-trust.md)) restricts *who can call the API*, but not *who they can claim to be*. Production deployments must derive these fields from a verified JWT/OIDC token, never the request body. | Security Architecture |
 
 ## Residual Risk
 

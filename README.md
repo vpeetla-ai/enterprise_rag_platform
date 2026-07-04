@@ -36,7 +36,7 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Access-before-ranking | **Implemented** | `AccessPolicy` filters chunks before scoring |
+| Access-before-ranking | **Implemented, but Principal is client-asserted** | `AccessPolicy` filters chunks before scoring — correctly, given the `Principal` it's handed. Nothing yet verifies that `tenant_id`/`groups`/`clearance` in the request body actually belong to the caller. See [ADR-0004](docs/adr/0004-api-auth-and-principal-trust.md) and the risk register. |
 | Hybrid in-memory retrieval | **Implemented** | BM25-like + semantic proxy + freshness |
 | Retriever / Reranker ports | **Implemented** | Swap vector DB or cross-encoder behind protocols |
 | Reference reranker | **Implemented** | `ScoreBoostReranker` (no ML deps) |
@@ -49,6 +49,7 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | OpenTelemetry exporters | **Removed** | Use **Langfuse** (`LANGFUSE_*`) — same as other platform repos |
 | Langfuse trace export | **Implemented** | `ops/langfuse_export.py` — pipeline spans + eval scores on `/v1/answer` |
 | Knowledge graph expansion | **Implemented** | `InMemoryGraphExpander` + ingest entity tagging |
+| API-key gate on `/v1/ingest`, `/v1/retrieve`, `/v1/answer` | **Implemented** | Set `RAG_API_KEY` on Render — these previously had zero caller auth at all |
 
 See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, AegisAI, and AgentOps.
 
@@ -212,6 +213,11 @@ API surface:
 
 ## Production Hardening Checklist
 
+- **Derive `Principal` from a verified JWT/OIDC token, not the request body** — today
+  `tenant_id`/`groups`/`clearance` are client-asserted and trivially spoofable (see
+  [ADR-0004](docs/adr/0004-api-auth-and-principal-trust.md)). This is the single most
+  important item before any real deployment; `RAG_API_KEY` only gates *who can call the API*,
+  not *who they can claim to be*.
 - Replace `InMemoryHybridRetriever` with OpenSearch plus vector-store and graph adapters.
 - Add a cross-encoder reranker and query rewrite service.
 - Add embedding/model version tables and blue-green index deployment.

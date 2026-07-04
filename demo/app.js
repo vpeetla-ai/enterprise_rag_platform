@@ -74,9 +74,12 @@ async function wakeApi(maxAttempts = 4) {
 }
 
 async function apiPost(path, body) {
+  const apiKey = document.getElementById("apiKey")?.value?.trim();
+  const headers = { "Content-Type": "application/json" };
+  if (apiKey) headers["X-API-Key"] = apiKey;
   const response = await fetch(`${API}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
     cache: "no-store",
     signal: AbortSignal.timeout(60000),

@@ -321,6 +321,7 @@ if FastAPI is not None:
             "citations": [
                 {
                     "id": citation.citation_id,
+                    "document_id": citation.document_id,
                     "title": citation.title,
                     "uri": citation.uri,
                     "owner": citation.owner,

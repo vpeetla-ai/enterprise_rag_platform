@@ -43,7 +43,8 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | Pipeline telemetry spans | **Implemented** | `EventRecorder` wired through `RagPipeline` |
 | Guardrails + HITL risk flags | **Implemented** | PII redaction, `human_approval_required` |
 | HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies` |
-| Golden eval fixtures | **Implemented** | `tests/fixtures/golden_queries.json` |
+| Golden eval fixtures (local) | **Implemented** | `tests/fixtures/golden_queries.json` |
+| Golden eval registry as a real CI gate | **Implemented** | `tests/test_golden_eval_gate.py` runs the shared `enterprise_rag_golden_v1` suite from [golden-eval-registry](https://github.com/vpeetla-ai/golden-eval-registry) against a real, isolated `RagPipeline` — CI checks out that repo and fails the build on regression, not just fixture validation |
 | Vector store adapter | **Implemented** | `QdrantHybridRetriever` behind `QDRANT_BACKEND=true` |
 | AegisAI gateway bridge | **Implemented** | `integrations/aegis_bridge.py` for ingest + high-risk answers |
 | OpenTelemetry exporters | **Removed** | Use **Langfuse** (`LANGFUSE_*`) — same as other platform repos |

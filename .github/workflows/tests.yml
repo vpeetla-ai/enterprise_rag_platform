@@ -23,4 +23,6 @@ jobs:
       - name: Install golden-eval-registry (shared eval fixtures + scorer)
         run: python -m pip install -e ./golden-eval-registry
       - name: Run tests (includes the real golden-eval-registry merge gate)
+        env:
+          GOLDEN_EVAL_REGISTRY_PATH: ${{ github.workspace }}/golden-eval-registry
         run: PYTHONPATH=src python -m unittest discover -s tests -v

@@ -43,6 +43,7 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | Pipeline telemetry spans | **Implemented** | `EventRecorder` wired through `RagPipeline` |
 | Guardrails + HITL risk flags | **Implemented** | PII redaction, `human_approval_required` |
 | HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies` |
+| Ingestion data contract + real lineage | **Implemented** | `/v1/ingest` rejects (422) documents with no owner/URI/near-empty content instead of silently indexing them; every chunk carries a real `content_hash` + `ingested_at`, preserved through entity-tagging, graph expansion, and the Qdrant round-trip. See [ADR-0005](docs/adr/0005-ingestion-data-contract-and-lineage.md) |
 | Golden eval fixtures (local) | **Implemented** | `tests/fixtures/golden_queries.json` |
 | Golden eval registry as a real CI gate | **Implemented** | `tests/test_golden_eval_gate.py` runs the shared `enterprise_rag_golden_v1` suite from [golden-eval-registry](https://github.com/vpeetla-ai/golden-eval-registry) against a real, isolated `RagPipeline` — CI checks out that repo and fails the build on regression, not just fixture validation |
 | Vector store adapter | **Implemented** | `QdrantHybridRetriever` behind `QDRANT_BACKEND=true` |

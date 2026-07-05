@@ -5,8 +5,11 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from enterprise_rag.core.models import Chunk, SourceDocument
+
+HARD_ISSUE_CODES = frozenset({"missing_owner", "missing_lineage", "low_content"})
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,14 @@ class IngestionIssue:
 class IngestionResult:
     chunks: tuple[Chunk, ...]
     issues: tuple[IngestionIssue, ...]
+
+    @property
+    def blocking_issues(self) -> tuple[IngestionIssue, ...]:
+        """Issues serious enough to reject ingestion outright, not just warn.
+        A caller that ignores `issues` entirely (as this API's route did until
+        this was added) silently accepts documents with no owner, no lineage
+        URI, or near-empty content — this is the actual data contract."""
+        return tuple(issue for issue in self.issues if issue.code in HARD_ISSUE_CODES)
 
 
 class DocumentChunker:
@@ -45,6 +56,7 @@ class DocumentChunker:
             digest = hashlib.sha256(
                 f"{document.document_id}:{index}:{text}".encode("utf-8")
             ).hexdigest()[:16]
+            content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
             chunks.append(
                 Chunk(
                     chunk_id=f"{document.document_id}:{digest}",
@@ -58,6 +70,8 @@ class DocumentChunker:
                     allowed_groups=document.allowed_groups,
                     metadata=document.metadata,
                     updated_at=document.updated_at,
+                    content_hash=content_hash,
+                    ingested_at=datetime.now(UTC),
                 )
             )
             if start + self.max_words >= len(words):

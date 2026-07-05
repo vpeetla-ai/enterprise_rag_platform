@@ -87,6 +87,8 @@ class QdrantHybridRetriever:
                     "allowed_groups": sorted(chunk.allowed_groups),
                     "metadata": chunk.metadata,
                     "updated_at": chunk.updated_at.isoformat(),
+                    "content_hash": chunk.content_hash,
+                    "ingested_at": chunk.ingested_at.isoformat(),
                 },
             )
             for chunk in chunks
@@ -103,6 +105,11 @@ def _payload_to_chunk(point_id: str, payload: dict) -> Chunk:
         updated_at = datetime.fromisoformat(updated_raw.replace("Z", "+00:00"))
     else:
         updated_at = datetime.now(UTC)
+    ingested_raw = payload.get("ingested_at")
+    if isinstance(ingested_raw, str):
+        ingested_at = datetime.fromisoformat(ingested_raw.replace("Z", "+00:00"))
+    else:
+        ingested_at = updated_at
     metadata = payload.get("metadata") or {}
     if not isinstance(metadata, dict):
         metadata = {}
@@ -118,4 +125,6 @@ def _payload_to_chunk(point_id: str, payload: dict) -> Chunk:
         allowed_groups=frozenset(str(g) for g in groups),
         metadata={str(k): str(v) for k, v in metadata.items()},
         updated_at=updated_at,
+        content_hash=str(payload.get("content_hash", "")),
+        ingested_at=ingested_at,
     )

@@ -55,6 +55,8 @@ class InMemoryGraphExpander:
             allowed_groups=chunk.allowed_groups,
             metadata=metadata,
             updated_at=chunk.updated_at,
+            content_hash=chunk.content_hash,
+            ingested_at=chunk.ingested_at,
         )
 
     def expand(

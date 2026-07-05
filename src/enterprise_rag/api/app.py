@@ -116,6 +116,8 @@ class AppState:
                     allowed_groups=chunk.allowed_groups,
                     metadata=metadata,
                     updated_at=chunk.updated_at,
+                    content_hash=chunk.content_hash,
+                    ingested_at=chunk.ingested_at,
                 )
             )
         return tuple(tagged)
@@ -267,8 +269,13 @@ if FastAPI is not None:
             metadata=request.metadata,
             updated_at=datetime.now(UTC),
         )
-        chunks = DocumentChunker(max_words=80, overlap_words=10).chunk(document).chunks
-        chunks = state._tag_chunks(chunks)
+        result = DocumentChunker(max_words=80, overlap_words=10).chunk(document)
+        if result.blocking_issues:
+            raise HTTPException(
+                status_code=422,
+                detail=[{"code": issue.code, "message": issue.message} for issue in result.blocking_issues],
+            )
+        chunks = state._tag_chunks(result.chunks)
         added = state.retriever.upsert(chunks)
         state._all_chunks.extend(chunks)
         state.graph_expander = InMemoryGraphExpander(tuple(state._all_chunks))
@@ -276,6 +283,11 @@ if FastAPI is not None:
             "document_id": request.document_id,
             "chunks_added": added,
             "gateway": _gateway_payload(gateway),
+            "warnings": [{"code": issue.code, "message": issue.message} for issue in result.issues],
+            "lineage": [
+                {"chunk_id": chunk.chunk_id, "content_hash": chunk.content_hash, "ingested_at": chunk.ingested_at.isoformat()}
+                for chunk in chunks
+            ],
         }
 
     @app.post("/v1/answer", dependencies=[Depends(_require_api_key)])

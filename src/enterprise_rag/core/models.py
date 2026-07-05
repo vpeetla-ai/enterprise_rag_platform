@@ -56,6 +56,12 @@ class Chunk:
     allowed_groups: frozenset[str]
     metadata: dict[str, str]
     updated_at: datetime
+    # Real lineage, not just an id derived from a hash — content_hash lets a
+    # caller detect whether a chunk's text actually changed since last seen;
+    # ingested_at is when *this* ingestion happened, distinct from updated_at
+    # (the source document's own timestamp, which a caller can set to anything).
+    content_hash: str = ""
+    ingested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)

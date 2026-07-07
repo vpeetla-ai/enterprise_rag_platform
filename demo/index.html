@@ -7,14 +7,33 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header>
-        <p class="eyebrow">Governed Knowledge Layer</p>
+    <header class="app-header">
+      <div class="app-header__inner">
+        <a href="/" class="brand">
+          <div class="brand__mark">ER</div>
+          <div class="brand__text">
+            <p class="brand__eyebrow">Governed knowledge layer</p>
+            <p class="brand__title">Enterprise RAG</p>
+          </div>
+        </a>
+        <div class="header-actions">
+          <span class="status-badge">Live API</span>
+          <a href="https://github.com/vpeetla-ai/enterprise_rag_platform" class="btn-ghost" style="padding:0.4rem 0.75rem;font-size:0.8rem;text-decoration:none">GitHub</a>
+        </div>
+      </div>
+    </header>
+    <main class="shell app-main">
+      <div class="page-hero">
+        <p class="eyebrow">Governed knowledge layer</p>
         <h1>Enterprise RAG Platform</h1>
         <p class="lede">Access-aware hybrid retrieval, grounded citations, guardrails, and optional AegisAI HITL bridge.</p>
-        <label for="apiKey" class="muted">API key (only if the backend requires one)</label>
+      </div>
+
+      <section class="panel">
+        <h2>API access</h2>
+        <label for="apiKey">API key (only if the backend requires one)</label>
         <input id="apiKey" type="password" placeholder="X-API-Key" />
-      </header>
+      </section>
 
       <section class="panel">
         <h2>Add your document</h2>
@@ -31,6 +50,7 @@
       </section>
 
       <section class="panel">
+        <h2>Ask a question</h2>
         <label for="query">Enterprise question</label>
         <textarea id="query" rows="3">What is the mandatory API key rotation period at Zephyr Corporation?</textarea>
         <label for="ragMode">Retrieval strategy</label>
@@ -73,6 +93,7 @@
         <pre id="trace" class="trace"></pre>
       </section>
     </main>
+    <footer class="app-footer">Enterprise RAG Platform · <a href="https://github.com/vpeetla-ai/enterprise_rag_platform">vpeetla-ai</a></footer>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="config.js"></script>
     <script>document.getElementById("apiUrl").textContent = window.ENTERPRISE_RAG_API || "/api";</script>

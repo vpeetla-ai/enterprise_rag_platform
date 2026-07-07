@@ -39,7 +39,8 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | Access-before-ranking | **Implemented, but Principal is client-asserted** | `AccessPolicy` filters chunks before scoring — correctly, given the `Principal` it's handed. Nothing yet verifies that `tenant_id`/`groups`/`clearance` in the request body actually belong to the caller. See [ADR-0004](docs/adr/0004-api-auth-and-principal-trust.md) and the risk register. |
 | Hybrid in-memory retrieval | **Implemented** | BM25-like + semantic proxy + freshness |
 | Retriever / Reranker ports | **Implemented** | Swap vector DB or cross-encoder behind protocols |
-| Reference reranker | **Implemented** | `ScoreBoostReranker` (no ML deps) |
+| Reference reranker | **Implemented** | `CrossEncoderReranker` (sentence-transformers) + `ScoreBoostReranker` fallback |
+| Decline-to-answer | **Implemented** | `RAG_DECLINE_THRESHOLD` — `declined_low_confidence` risk flag |
 | Pipeline telemetry spans | **Implemented** | `EventRecorder` wired through `RagPipeline` |
 | Guardrails + HITL risk flags | **Implemented** | PII redaction, `human_approval_required` |
 | HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies` |
@@ -57,21 +58,22 @@ See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, Ae
 
 ## System Context
 
+Canonical: [`docs/diagrams/canonical-architecture.mmd`](docs/diagrams/canonical-architecture.mmd)
+
 ```mermaid
 flowchart LR
-  User["Enterprise User"] --> App["AI Assistant / Workflow App"]
-  App --> Gateway["RAG API — FastAPI adapter"]
-  Gateway --> Policy["Guardrails + Access Policy"]
+  User["Enterprise User"] --> App["AI Assistant / Workflow"]
+  App --> Gateway["RAG API — FastAPI"]
+  Gateway --> Policy["Access Policy<br/>BEFORE ranking"]
   Gateway --> Orchestrator["RagPipeline"]
-  Orchestrator --> Retrieval["InMemoryHybridRetriever"]
-  Orchestrator --> Rerank["ScoreBoostReranker"]
-  Orchestrator --> Context["Context Assembler"]
-  Orchestrator --> Gen["Extractive Generator"]
-  Sources["Enterprise Sources"] --> Ingestion["POST /v1/ingest"]
+  Orchestrator --> Retrieval["Hybrid Retriever"]
+  Orchestrator --> Rerank["CrossEncoderReranker"]
+  Orchestrator --> Decline{"Score ≥ threshold?"}
+  Decline -->|no| Refuse["Decline to answer"]
+  Decline -->|yes| Gen["Grounded answer + citations"]
+  Sources["Enterprise docs"] --> Ingestion["POST /v1/ingest"]
   Ingestion --> Retrieval
-  Gateway --> Obs["EventRecorder spans"]
-  Orchestrator --> Eval["Golden fixtures + eval/metrics"]
-  Obs --> LF["Langfuse Cloud<br/>LANGFUSE_*"]
+  Gateway --> Obs["Pipeline spans → Langfuse"]
 ```
 
 *Solid boxes are implemented. LLM routers are extension points documented in ADRs.*

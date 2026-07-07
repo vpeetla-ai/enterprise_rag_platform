@@ -1,0 +1,16 @@
+flowchart LR
+  User["Enterprise User"] --> App["AI Assistant / Workflow"]
+  App --> Gateway["RAG API — FastAPI"]
+  Gateway --> Policy["Guardrails + Access Policy<br/>principal filter BEFORE ranking"]
+  Gateway --> Orchestrator["RagPipeline"]
+  Orchestrator --> Retrieval["Hybrid Retriever<br/>BM25 + semantic"]
+  Orchestrator --> Rerank["CrossEncoderReranker<br/>ms-marco-MiniLM"]
+  Orchestrator --> Decline{"Score ≥ threshold?"}
+  Decline -->|no| Refuse["Decline to answer<br/>declined_low_confidence"]
+  Decline -->|yes| Context["Context Assembler"]
+  Context --> Gen["Grounded generator + citations"]
+  Sources["Enterprise docs"] --> Ingestion["POST /v1/ingest"]
+  Ingestion --> Retrieval
+  Gateway --> Obs["Pipeline spans"]
+  Orchestrator --> Eval["Golden eval CI gate"]
+  Obs --> LF["Langfuse<br/>LANGFUSE_*"]

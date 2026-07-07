@@ -20,6 +20,12 @@ dev = [
 qdrant = [
   "qdrant-client>=1.9.0",
 ]
+rerank = [
+  "sentence-transformers>=3.0.0",
+]
+observability = [
+  "structlog>=24.0.0",
+]
 
 [tool.ruff]
 line-length = 100

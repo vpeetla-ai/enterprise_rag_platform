@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Protocol
 
 from enterprise_rag.core.context import ContextAssembler
@@ -12,6 +13,20 @@ from enterprise_rag.core.reranker import Reranker
 from enterprise_rag.core.retriever import Retriever
 from enterprise_rag.core.text import query_terms, tokenize
 from enterprise_rag.ops.telemetry import EventRecorder
+
+DECLINE_MESSAGE = (
+    "I don't have sufficient evidence in authorized sources to answer confidently."
+)
+
+
+def _decline_threshold() -> float:
+    return float(os.getenv("RAG_DECLINE_THRESHOLD", "0.15"))
+
+
+def _should_decline(hits: tuple[RetrievalHit, ...]) -> bool:
+    if not hits:
+        return True
+    return hits[0].score < _decline_threshold()
 
 
 class Generator(Protocol):
@@ -80,14 +95,39 @@ class RagPipeline:
                 filters=retrieval_query.filters,
                 top_k=retrieval_query.top_k,
             )
+            fetch_k = sanitized_query.top_k
+            if self.reranker is not None:
+                fetch_k = max(sanitized_query.top_k, sanitized_query.top_k * 4)
+            search_query = RetrievalQuery(
+                query=sanitized_query.query,
+                tenant_id=sanitized_query.tenant_id,
+                principal=sanitized_query.principal,
+                mode=sanitized_query.mode,
+                filters=sanitized_query.filters,
+                top_k=fetch_k,
+            )
             with self.recorder.span("rag.retrieve", mode=sanitized_query.mode.value):
-                hits = self.retriever.search(sanitized_query)
+                hits = self.retriever.search(search_query)
             if self.graph_expander and hits:
                 with self.recorder.span("rag.graph_expand", hit_count=len(hits)):
-                    hits = self.graph_expander.expand(sanitized_query, hits, sanitized_query.top_k)
+                    hits = self.graph_expander.expand(sanitized_query, hits, fetch_k)
             if self.reranker and hits:
                 with self.recorder.span("rag.rerank"):
                     hits = self._rerank(sanitized_query, hits)
+            if _should_decline(hits):
+                with self.recorder.span(
+                    "rag.decline",
+                    top_score=hits[0].score if hits else 0.0,
+                    threshold=_decline_threshold(),
+                ):
+                    return Answer(
+                        answer=DECLINE_MESSAGE,
+                        citations=(),
+                        grounded=False,
+                        risk_flags=tuple(
+                            dict.fromkeys((*inspected.flags, "declined_low_confidence"))
+                        ),
+                    )
             with self.recorder.span("rag.assemble", hit_count=len(hits)):
                 context = self.assembler.assemble(sanitized_query.query, hits)
             with self.recorder.span("rag.generate"):

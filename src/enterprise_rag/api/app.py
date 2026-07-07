@@ -30,11 +30,12 @@ from enterprise_rag.core.graph_expander import InMemoryGraphExpander
 from enterprise_rag.core.ingestion import DocumentChunker
 from enterprise_rag.core.models import Classification, Principal, RetrievalMode, RetrievalQuery, SourceDocument
 from enterprise_rag.core.pipeline import RagPipeline
-from enterprise_rag.core.reranker import ScoreBoostReranker
+from enterprise_rag.core.reranker import ScoreBoostReranker, build_reranker
 from enterprise_rag.core.retrieval import InMemoryHybridRetriever
 from enterprise_rag.integrations.aegis_bridge import authorize_high_risk_answer, authorize_ingest
 from enterprise_rag.ops.langfuse_export import export_recorder
 from enterprise_rag.ops.telemetry import EventRecorder
+from enterprise_rag.vpeetla_observability.middleware import TraceRequestMiddleware
 
 
 class QueryRequest(BaseModel):  # type: ignore[misc]
@@ -92,7 +93,7 @@ class AppState:
         self.graph_expander = InMemoryGraphExpander(tuple(self._all_chunks))
         self.pipeline = RagPipeline(
             self.retriever,
-            reranker=ScoreBoostReranker(),
+            reranker=build_reranker(),
             graph_expander=self.graph_expander,
             recorder=self.recorder,
         )
@@ -190,6 +191,10 @@ def _require_api_key(x_api_key: Annotated[str | None, Header()] = None) -> None:
 if FastAPI is not None:
     app = FastAPI(title="Enterprise RAG Platform", version="0.3.0")
     app.add_middleware(
+        TraceRequestMiddleware,
+        service_name="enterprise-rag-platform",
+    )
+    app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_methods=["*"],
@@ -206,13 +211,16 @@ if FastAPI is not None:
     def strategies() -> dict[str, list[str]]:
         return {
             "retrieval_modes": [mode.value for mode in RetrievalMode],
-            "rerankers": ["score_boost", "none"],
+            "rerankers": ["score_boost", "cross_encoder", "none"],
             "backends": ["memory", "qdrant"],
             "graph_expansion": ["in_memory"],
+            "decline_threshold": os.getenv("RAG_DECLINE_THRESHOLD", "0.15"),
             "notes": [
                 "Reference implementation uses in-memory hybrid lexical + semantic proxy scoring.",
+                "Set RAG_RERANKER=cross_encoder with pip install -e '.[rerank]' for cross-encoder rerank.",
                 "Set QDRANT_BACKEND=true with qdrant-client installed for vector adapter.",
-                "Set rerank=false on /v1/answer to skip ScoreBoostReranker.",
+                "Set rerank=false on /v1/answer to skip reranker.",
+                "RAG_DECLINE_THRESHOLD gates answers when top hit score is below threshold.",
             ],
         }
 
@@ -235,7 +243,7 @@ if FastAPI is not None:
             )
         )
         if request.rerank:
-            hits = ScoreBoostReranker().rerank(request.query, hits, request.top_k)
+            hits = build_reranker().rerank(request.query, hits, request.top_k)
         return {
             "hits": [
                 {
@@ -301,7 +309,7 @@ if FastAPI is not None:
         )
         pipeline = RagPipeline(
             state.retriever,
-            reranker=ScoreBoostReranker() if request.rerank else None,
+            reranker=build_reranker() if request.rerank else None,
             graph_expander=state.graph_expander if request.agentic else None,
             recorder=state.recorder,
         )
@@ -329,6 +337,7 @@ if FastAPI is not None:
         return {
             "answer": result.answer,
             "grounded": result.grounded,
+            "declined": "declined_low_confidence" in result.risk_flags,
             "risk_flags": result.risk_flags,
             "citations": [
                 {

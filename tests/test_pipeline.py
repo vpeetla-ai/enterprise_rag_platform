@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from enterprise_rag.core.ingestion import DocumentChunker
 from enterprise_rag.core.models import Classification, Principal, RetrievalQuery, SourceDocument
 from enterprise_rag.core.pipeline import RagPipeline
+from enterprise_rag.core.reranker import ScoreBoostReranker
 from enterprise_rag.core.retrieval import InMemoryHybridRetriever
 
 
@@ -119,6 +120,15 @@ class PipelineTests(unittest.TestCase):
 
         self.assertIn("Venkata Peetla", answer.answer)
         self.assertEqual(answer.citations[0].title, "Venkata_Peetla")
+
+    def test_declines_when_no_hits(self) -> None:
+        principal = Principal("u1", "acme", frozenset({"engineering"}), Classification.INTERNAL)
+        pipeline = RagPipeline(InMemoryHybridRetriever(()), reranker=ScoreBoostReranker())
+
+        answer = pipeline.answer(RetrievalQuery("anything", "acme", principal))
+
+        self.assertIn("declined_low_confidence", answer.risk_flags)
+        self.assertFalse(answer.grounded)
 
 
 if __name__ == "__main__":

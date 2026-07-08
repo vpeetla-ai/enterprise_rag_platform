@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Enterprise RAG Platform — Live Demo</title>
+    <link rel="stylesheet" href="architect-panel.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -28,6 +29,8 @@
         <h1>Enterprise RAG Platform</h1>
         <p class="lede">Access-aware hybrid retrieval, grounded citations, guardrails, and optional AegisAI HITL bridge.</p>
       </div>
+
+      <div id="architect-root"></div>
 
       <section class="panel">
         <h2>API access</h2>
@@ -96,6 +99,8 @@
     <footer class="app-footer">Enterprise RAG Platform · <a href="https://github.com/vpeetla-ai/enterprise_rag_platform">vpeetla-ai</a></footer>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="config.js"></script>
+    <script src="architect-config.js"></script>
+    <script src="architect-panel.js"></script>
     <script>document.getElementById("apiUrl").textContent = window.ENTERPRISE_RAG_API || "/api";</script>
     <script src="app.js"></script>
   </body>

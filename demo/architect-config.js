@@ -1,0 +1,19 @@
+window.ARCHITECT_CONFIG = {
+  tagline:
+    "Access-before-ranking RAG: principals filter chunks before hybrid retrieval scores them. Citations and decline gates prove governance, not just retrieval.",
+  metricsUrl: (window.ENTERPRISE_RAG_API || "") + "/v1/ops/metrics",
+  metricsPath: "/v1/ops/metrics",
+  metricLabels: { runs: "Queries + answers", entities: "Indexed chunks", latency: "P95 latency" },
+  layers: [
+    { tier: "L1", name: "Experience", role: "Governed Q&A demo", components: ["Static Vercel UI", "Ingest + ask", "Citations panel"] },
+    { tier: "L2", name: "RAG pipeline", role: "Hybrid + agentic modes", components: ["Access filter", "Rerank", "Graph expand"] },
+    { tier: "L3", name: "Governance bridge", role: "High-risk answer gate", components: ["AegisAI authorize", "Decline threshold", "HITL flags"] },
+    { tier: "L4", name: "Ops", role: "Eval + export", components: ["Golden eval CI", "Langfuse export", "/v1/ops/metrics"] },
+  ],
+  tradeoffs: [
+    { decision: "Access-before-ranking", gain: "No leaked chunks across clearance levels", trade: "Extra filter pass vs pure vector search" },
+    { decision: "In-memory retriever on Render free tier", gain: "Zero infra cost for portfolio demos", trade: "Corpus resets on cold start — re-ingest" },
+    { decision: "Decline below confidence threshold", gain: "Safer answers under uncertainty", trade: "More 'no answer' UX vs always-generate" },
+    { decision: "Optional Qdrant backend", gain: "Production-scale vector store path", trade: "Another service to operate vs memory mode" },
+  ],
+};

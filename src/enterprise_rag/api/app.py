@@ -89,6 +89,10 @@ class AppState:
         self.recorder = EventRecorder()
         self.retriever = _build_retriever()
         self._all_chunks: list = []
+        self.query_count = 0
+        self.ingest_count = 0
+        self.answer_count = 0
+        self.declined_count = 0
         self._seed_demo_corpus()
         self.graph_expander = InMemoryGraphExpander(tuple(self._all_chunks))
         self.pipeline = RagPipeline(
@@ -207,6 +211,29 @@ if FastAPI is not None:
         backend = "qdrant" if os.getenv("QDRANT_BACKEND", "").strip().lower() in {"1", "true", "yes", "on"} else "memory"
         return {"status": "ok", "service": "enterprise-rag-platform", "retriever_backend": backend}
 
+    @app.get("/v1/ops/metrics")
+    def ops_metrics() -> dict[str, Any]:
+        total = state.query_count + state.answer_count
+        finished = state.answer_count or 1
+        success = round(100.0 * (state.answer_count - state.declined_count) / finished, 1) if state.answer_count else 100.0
+        return {
+            "service": "enterprise-rag-platform",
+            "collected_at": datetime.now(UTC).isoformat(),
+            "total_runs": total,
+            "success_rate_pct": success,
+            "p95_latency_ms": None,
+            "active_entities": len(state._all_chunks),
+            "slo": {"target_uptime_pct": 99.5, "success_target_pct": 95.0},
+            "extra": {
+                "ingest_count": state.ingest_count,
+                "answer_count": state.answer_count,
+                "declined_count": state.declined_count,
+                "retriever_backend": "qdrant"
+                if os.getenv("QDRANT_BACKEND", "").strip().lower() in {"1", "true", "yes", "on"}
+                else "memory",
+            },
+        }
+
     @app.get("/v1/strategies")
     def strategies() -> dict[str, list[str]]:
         return {
@@ -226,6 +253,7 @@ if FastAPI is not None:
 
     @app.post("/v1/retrieve", dependencies=[Depends(_require_api_key)])
     def retrieve(request: QueryRequest) -> dict[str, Any]:
+        state.query_count += 1
         principal = Principal(
             user_id=request.user_id,
             tenant_id=request.tenant_id,
@@ -261,6 +289,7 @@ if FastAPI is not None:
 
     @app.post("/v1/ingest", dependencies=[Depends(_require_api_key)])
     def ingest(request: IngestRequest) -> dict[str, Any]:
+        state.ingest_count += 1
         case_id = request.case_id or f"ingest-{request.document_id}-{uuid.uuid4().hex[:8]}"
         gateway = authorize_ingest(case_id=case_id, document_id=request.document_id)
         if gateway.blocked:
@@ -300,6 +329,7 @@ if FastAPI is not None:
 
     @app.post("/v1/answer", dependencies=[Depends(_require_api_key)])
     def answer(request: QueryRequest) -> dict[str, Any]:
+        state.answer_count += 1
         state.recorder.events.clear()
         principal = Principal(
             user_id=request.user_id,
@@ -325,6 +355,8 @@ if FastAPI is not None:
         )
         case_id = request.case_id or f"rag-{request.tenant_id}-{uuid.uuid4().hex[:8]}"
         gateway = authorize_high_risk_answer(case_id=case_id, risk_flags=result.risk_flags)
+        if "declined_low_confidence" in result.risk_flags:
+            state.declined_count += 1
         langfuse_status = export_recorder(
             state.recorder,
             metadata={"tenant_id": request.tenant_id, "case_id": case_id},

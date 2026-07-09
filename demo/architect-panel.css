@@ -42,3 +42,19 @@
   gap: 0.35rem;
 }
 .arch-metric strong { font-size: 1.5rem; }
+
+/* Workbench tabs */
+.workbench-tabs { display: flex; gap: 0.35rem; margin: 1rem 0 1.25rem; border-bottom: 1px solid var(--border, rgba(255,255,255,0.08)); }
+.workbench-tab {
+  position: relative; margin-bottom: -1px; padding: 0.65rem 1rem 0.75rem; border: 1px solid transparent;
+  border-radius: 10px 10px 0 0; background: transparent; cursor: pointer; text-align: left; color: inherit;
+}
+.workbench-tab.is-active { background: var(--surface, rgba(255,255,255,0.03)); border-color: var(--border, rgba(255,255,255,0.08)); }
+.workbench-tab__label { display: block; font-size: 0.85rem; font-weight: 600; }
+.workbench-tab:not(.is-active) .workbench-tab__label { opacity: 0.75; }
+.workbench-tab__hint { display: block; font-size: 0.65rem; opacity: 0.55; margin-top: 0.1rem; }
+.workbench-tab.is-active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent, #2dd4bf); }
+.ao-title { font-size: 1.1rem; font-weight: 600; margin: 1rem 0 0.5rem; }
+.ao-layer-name { color: inherit; font-weight: 600; }
+.ao-trade-title { display: block; margin-bottom: 0.35rem; font-weight: 600; }
+.workbench-arch-panel[hidden], #workbench-product[hidden], .workbench-product-legacy[hidden] { display: none !important; }

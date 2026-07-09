@@ -1,4 +1,4 @@
-/** Shared architect landing panel for static Vercel demos. */
+/** Tabbed workbench for static demos — product first, architecture second. */
 (function () {
   const cfg = window.ARCHITECT_CONFIG;
   if (!cfg) return;
@@ -11,17 +11,12 @@
   }
 
   function renderLayers(root) {
-    const section = el("section", "panel architect-panel");
-    section.appendChild(el("p", "eyebrow", "Eagle-eye view"));
-    section.appendChild(el("h2", null, "Architecture at a glance"));
-    section.appendChild(el("p", "lede", cfg.tagline));
-
     const stack = el("div", "arch-layers");
     (cfg.layers || []).forEach((layer) => {
       const row = el("div", "arch-layer");
       row.appendChild(el("span", "arch-tier", layer.tier));
       const mid = el("div", "arch-mid");
-      mid.appendChild(el("strong", null, layer.name));
+      mid.appendChild(el("strong", "ao-layer-name", layer.name));
       mid.appendChild(el("span", "muted", layer.role));
       row.appendChild(mid);
       const chips = el("div", "arch-chips");
@@ -29,84 +24,145 @@
       row.appendChild(chips);
       stack.appendChild(row);
     });
-    section.appendChild(stack);
-    root.appendChild(section);
+    root.appendChild(stack);
   }
 
   function renderTradeoffs(root) {
-    const section = el("section", "panel architect-panel");
-    section.appendChild(el("p", "eyebrow", "Principal tradeoffs"));
-    section.appendChild(el("h2", null, "Decisions, not defaults"));
     const grid = el("div", "arch-tradeoffs");
     (cfg.tradeoffs || []).forEach((t) => {
       const card = el("div", "arch-tradeoff");
       card.innerHTML =
-        "<strong>" +
+        '<strong class="ao-trade-title">' +
         t.decision +
-        "</strong><p><span class=\"gain\">Gain:</span> " +
+        '</strong><p><span class="gain">Gain</span> — ' +
         t.gain +
-        "</p><p><span class=\"trade\">Trade:</span> " +
+        "</p><p><span class=\"trade\">Trade</span> — " +
         t.trade +
         "</p>";
       grid.appendChild(card);
     });
-    section.appendChild(grid);
-    root.appendChild(section);
+    root.appendChild(grid);
   }
 
   function renderMetrics(root, data) {
-    const section = el("section", "panel architect-panel");
-    section.appendChild(el("p", "eyebrow", "Production metrics"));
-    section.appendChild(el("h2", null, "Live from the API"));
-    const grid = el("div", "arch-metrics");
     const labels = cfg.metricLabels || {};
+    const grid = el("div", "arch-metrics");
     const cards = [
-      [labels.runs || "Total runs", data.total_runs],
+      [labels.runs || "Runs", data.total_runs],
       ["Success rate", data.success_rate_pct + "%"],
-      [labels.latency || "P95 latency", data.p95_latency_ms != null ? data.p95_latency_ms + "ms" : "—"],
-      [labels.entities || "Active entities", data.active_entities],
+      [labels.latency || "P95", data.p95_latency_ms != null ? data.p95_latency_ms + "ms" : "—"],
+      [labels.entities || "Entities", data.active_entities],
     ];
     cards.forEach(([label, value]) => {
       const card = el("div", "arch-metric");
-      card.innerHTML = "<span class=\"muted\">" + label + "</span><strong>" + value + "</strong>";
+      card.innerHTML = "<span>" + label + "</span><strong>" + value + "</strong>";
       grid.appendChild(card);
     });
-    section.appendChild(grid);
-    const foot = el(
-      "p",
-      "muted api-hint",
-      "Live from <code>" +
-        (cfg.metricsPath || "/ops/metrics") +
-        "</code> · SLO " +
-        (data.slo?.success_target_pct || 95) +
-        "% success"
+    root.appendChild(grid);
+    root.appendChild(
+      el(
+        "p",
+        "muted api-hint",
+        "Live from <code>" + (cfg.metricsPath || "/ops/metrics") + "</code>"
+      )
     );
-    section.appendChild(foot);
-    root.appendChild(section);
   }
 
   function normalize(data) {
-    const slo = data.slo || {};
     return {
       total_runs: data.total_runs ?? data.sample_size ?? data.total ?? 0,
       success_rate_pct: data.success_rate_pct ?? 100 - (data.failure_rate_pct || 0),
       p95_latency_ms: data.p95_latency_ms ?? data.p95_node_latency_ms ?? data.p95_ms ?? null,
       active_entities: data.active_entities ?? data.invited_users ?? 0,
-      slo: slo,
     };
   }
 
-  function mount() {
-    const root = document.getElementById("architect-root");
-    if (!root) return;
-    renderLayers(root);
-    renderTradeoffs(root);
+  function buildArchitecturePanel() {
+    const panel = el("section", "panel architect-panel workbench-arch-panel");
+    panel.hidden = true;
+    panel.appendChild(el("p", "eyebrow", "Eagle-eye architecture"));
+    panel.appendChild(el("h2", "ao-title", "How the system is wired"));
+    panel.appendChild(el("p", "lede", cfg.tagline));
+    renderLayers(panel);
+    panel.appendChild(el("h2", "ao-title", "Principal tradeoffs"));
+    renderTradeoffs(panel);
+    panel.appendChild(el("h2", "ao-title", "Production metrics"));
+    const metricsSlot = el("div", "arch-metrics-slot");
+    panel.appendChild(metricsSlot);
     if (cfg.metricsUrl) {
       fetch(cfg.metricsUrl, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
-        .then((data) => data && renderMetrics(root, normalize(data)))
+        .then((data) => data && renderMetrics(metricsSlot, normalize(data)))
         .catch(() => null);
     }
+    return panel;
+  }
+
+  function mount() {
+    const main = document.querySelector("main.shell, main.app-main, main");
+    const productRoot = document.getElementById("workbench-product");
+    if (!main) return;
+
+    const hero = main.querySelector(".page-hero");
+    const tabs = el("nav", "workbench-tabs");
+    tabs.setAttribute("role", "tablist");
+
+    const btnProduct = el("button", "workbench-tab is-active", "");
+    btnProduct.type = "button";
+    btnProduct.innerHTML = '<span class="workbench-tab__label">Live product</span><span class="workbench-tab__hint">Run the demo</span>';
+
+    const btnArch = el("button", "workbench-tab", "");
+    btnArch.type = "button";
+    btnArch.innerHTML =
+      '<span class="workbench-tab__label">Architecture & metrics</span><span class="workbench-tab__hint">Stack, tradeoffs, SLOs</span>';
+
+    tabs.appendChild(btnProduct);
+    tabs.appendChild(btnArch);
+
+    const archPanel = buildArchitecturePanel();
+
+    if (productRoot) {
+      const mountPoint = hero ? hero.nextSibling : main.firstChild;
+      if (hero && hero.nextSibling) main.insertBefore(tabs, hero.nextSibling);
+      else main.insertBefore(tabs, main.firstChild);
+      main.appendChild(archPanel);
+
+      function show(tab) {
+        const isProduct = tab === "product";
+        productRoot.hidden = !isProduct;
+        archPanel.hidden = isProduct;
+        btnProduct.classList.toggle("is-active", isProduct);
+        btnArch.classList.toggle("is-active", !isProduct);
+      }
+      btnProduct.addEventListener("click", () => show("product"));
+      btnArch.addEventListener("click", () => show("architecture"));
+      show("product");
+      return;
+    }
+
+    // Legacy: wrap panels after architect-root
+    const legacyRoot = document.getElementById("architect-root");
+    if (legacyRoot) legacyRoot.remove();
+    if (hero) hero.parentNode.insertBefore(tabs, hero.nextSibling);
+    main.appendChild(archPanel);
+
+    const panels = Array.from(main.querySelectorAll("section.panel, .live-panel, .command-center, #view-loop"));
+    const productWrap = el("div", "workbench-product-legacy");
+    panels.forEach((p) => {
+      if (p !== archPanel && !p.closest(".workbench-arch-panel")) productWrap.appendChild(p);
+    });
+    tabs.after(productWrap);
+
+    function show(tab) {
+      const isProduct = tab === "product";
+      productWrap.hidden = !isProduct;
+      archPanel.hidden = isProduct;
+      btnProduct.classList.toggle("is-active", isProduct);
+      btnArch.classList.toggle("is-active", !isProduct);
+    }
+    btnProduct.addEventListener("click", () => show("product"));
+    btnArch.addEventListener("click", () => show("architecture"));
+    show("product");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);

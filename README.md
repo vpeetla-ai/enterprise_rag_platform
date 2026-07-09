@@ -38,7 +38,7 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Access-before-ranking | **Implemented, but Principal is client-asserted** | `AccessPolicy` filters chunks before scoring — correctly, given the `Principal` it's handed. Nothing yet verifies that `tenant_id`/`groups`/`clearance` in the request body actually belong to the caller. See [ADR-0004](docs/adr/0004-api-auth-and-principal-trust.md) and the risk register. |
+| Access-before-ranking | **Implemented** | `AccessPolicy` before scoring. Demo: Principal from request body (ADR-0004). **`PRODUCTION_STRICT=true` + `RAG_JWT_SECRET`:** Principal from signed HS256 JWT; body spoof ignored (ADR-0006). |
 | Hybrid in-memory retrieval | **Implemented** | BM25-like + semantic proxy + freshness |
 | Retriever / Reranker ports | **Implemented** | Swap vector DB or cross-encoder behind protocols |
 | Reference reranker | **Implemented** | `CrossEncoderReranker` (sentence-transformers) + `ScoreBoostReranker` fallback |

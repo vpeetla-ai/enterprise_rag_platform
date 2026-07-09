@@ -25,6 +25,7 @@ except ImportError:  # pragma: no cover
     BaseModel = object  # type: ignore[assignment,misc]
     Field = lambda *args, **kwargs: None  # type: ignore[assignment,misc]
 
+from enterprise_rag.api.principal_auth import production_strict, resolve_principal
 from enterprise_rag.core.entity_extract import extract_entities
 from enterprise_rag.core.graph_expander import InMemoryGraphExpander
 from enterprise_rag.core.ingestion import DocumentChunker
@@ -252,18 +253,22 @@ if FastAPI is not None:
         }
 
     @app.post("/v1/retrieve", dependencies=[Depends(_require_api_key)])
-    def retrieve(request: QueryRequest) -> dict[str, Any]:
+    def retrieve(
+        request: QueryRequest,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
         state.query_count += 1
-        principal = Principal(
-            user_id=request.user_id,
-            tenant_id=request.tenant_id,
-            groups=frozenset(request.groups),
-            clearance=request.clearance,
+        principal = resolve_principal(
+            authorization=authorization,
+            body_user_id=request.user_id,
+            body_tenant_id=request.tenant_id,
+            body_groups=request.groups,
+            body_clearance=request.clearance,
         )
         hits = state.retriever.search(
             RetrievalQuery(
                 query=request.query,
-                tenant_id=request.tenant_id,
+                tenant_id=principal.tenant_id,
                 principal=principal,
                 filters=request.filters,
                 mode=request.mode,
@@ -284,7 +289,8 @@ if FastAPI is not None:
                     "owner": hit.chunk.owner,
                 }
                 for hit in hits
-            ]
+            ],
+            "principal_source": "jwt" if production_strict() else "request_body",
         }
 
     @app.post("/v1/ingest", dependencies=[Depends(_require_api_key)])
@@ -328,14 +334,18 @@ if FastAPI is not None:
         }
 
     @app.post("/v1/answer", dependencies=[Depends(_require_api_key)])
-    def answer(request: QueryRequest) -> dict[str, Any]:
+    def answer(
+        request: QueryRequest,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
         state.answer_count += 1
         state.recorder.events.clear()
-        principal = Principal(
-            user_id=request.user_id,
-            tenant_id=request.tenant_id,
-            groups=frozenset(request.groups),
-            clearance=request.clearance,
+        principal = resolve_principal(
+            authorization=authorization,
+            body_user_id=request.user_id,
+            body_tenant_id=request.tenant_id,
+            body_groups=request.groups,
+            body_clearance=request.clearance,
         )
         pipeline = RagPipeline(
             state.retriever,
@@ -346,20 +356,20 @@ if FastAPI is not None:
         result = pipeline.answer(
             RetrievalQuery(
                 query=request.query,
-                tenant_id=request.tenant_id,
+                tenant_id=principal.tenant_id,
                 principal=principal,
                 filters=request.filters,
                 mode=request.mode,
                 top_k=request.top_k,
             )
         )
-        case_id = request.case_id or f"rag-{request.tenant_id}-{uuid.uuid4().hex[:8]}"
+        case_id = request.case_id or f"rag-{principal.tenant_id}-{uuid.uuid4().hex[:8]}"
         gateway = authorize_high_risk_answer(case_id=case_id, risk_flags=result.risk_flags)
         if "declined_low_confidence" in result.risk_flags:
             state.declined_count += 1
         langfuse_status = export_recorder(
             state.recorder,
-            metadata={"tenant_id": request.tenant_id, "case_id": case_id},
+            metadata={"tenant_id": principal.tenant_id, "case_id": case_id},
             eval_scores={
                 "grounded": result.grounded,
                 "citation_count": len(result.citations),
@@ -371,6 +381,7 @@ if FastAPI is not None:
             "grounded": result.grounded,
             "declined": "declined_low_confidence" in result.risk_flags,
             "risk_flags": result.risk_flags,
+            "principal_source": "jwt" if production_strict() else "request_body",
             "citations": [
                 {
                     "id": citation.citation_id,

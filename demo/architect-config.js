@@ -16,4 +16,12 @@ window.ARCHITECT_CONFIG = {
     { decision: "Decline below confidence threshold", gain: "Safer answers under uncertainty", trade: "More 'no answer' UX vs always-generate" },
     { decision: "Optional Qdrant backend", gain: "Production-scale vector store path", trade: "Another service to operate vs memory mode" },
   ],
+  adrLinks: [
+    { title: "ADR-004 — API auth and principal trust", href: "https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/adr/0004-api-auth-and-principal-trust.md" },
+    { title: "Case study — Enterprise RAG", href: "https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/case-studies/enterprise-rag-platform.md" },
+  ],
+  docsLinks: [
+    { title: "SLO targets", href: "https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/SLO.md" },
+    { title: "Architecture", href: "https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/ARCHITECTURE.md" },
+  ],
 };

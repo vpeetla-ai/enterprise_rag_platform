@@ -226,3 +226,22 @@
 .workbench-product-legacy[hidden] {
   display: none !important;
 }
+
+.arch-doc-links {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.arch-doc-links a {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--vp-accent, #2563eb);
+  text-decoration: none;
+}
+
+.arch-doc-links a:hover {
+  text-decoration: underline;
+}

@@ -44,6 +44,24 @@
     root.appendChild(grid);
   }
 
+  function renderDocLinks(root) {
+    const links = [].concat(cfg.adrLinks || [], cfg.docsLinks || []);
+    if (!links.length) return;
+    root.appendChild(el("h2", "ao-title", "Architecture record"));
+    const ul = el("ul", "arch-doc-links");
+    links.forEach((link) => {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = link.href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = link.title + " →";
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+    root.appendChild(ul);
+  }
+
   function renderMetrics(root, data) {
     const labels = cfg.metricLabels || {};
     const grid = el("div", "arch-metrics");
@@ -86,6 +104,7 @@
     renderLayers(panel);
     panel.appendChild(el("h2", "ao-title", "Principal tradeoffs"));
     renderTradeoffs(panel);
+    renderDocLinks(panel);
     panel.appendChild(el("h2", "ao-title", "Production metrics"));
     const metricsSlot = el("div", "arch-metrics-slot");
     panel.appendChild(metricsSlot);

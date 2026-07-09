@@ -39,6 +39,7 @@
   /* legacy aliases for existing demo class names */
   --bg: var(--vp-bg);
   --panel: var(--vp-surface);
+  --surface: var(--vp-surface);
   --text: var(--vp-text);
   --muted: var(--vp-text-muted);
   --accent: var(--vp-accent);
@@ -120,8 +121,9 @@ body {
 .brand__title {
   margin: 0;
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.25;
+  color: var(--vp-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -223,11 +225,11 @@ body {
 
 .eyebrow {
   margin: 0 0 0.35rem;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--vp-accent);
+  letter-spacing: 0.14em;
+  color: var(--vp-text-muted);
 }
 
 .page-hero h1 {

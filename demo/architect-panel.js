@@ -99,11 +99,18 @@
   }
 
   function mount() {
-    const main = document.querySelector("main.shell, main.app-main, main");
     const productRoot = document.getElementById("workbench-product");
+    const main =
+      document.querySelector("main.shell, main.app-main, main") ||
+      document.querySelector(".app-main, .shell") ||
+      (productRoot && productRoot.parentElement) ||
+      document.body;
     if (!main) return;
 
-    const hero = main.querySelector(".page-hero");
+    const hero =
+      main.querySelector(".page-hero") ||
+      main.querySelector(".hdr") ||
+      main.querySelector(".app-header");
     const tabs = el("nav", "workbench-tabs");
     tabs.setAttribute("role", "tablist");
 

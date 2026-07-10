@@ -82,6 +82,8 @@ flowchart LR
 
 ## Runtime Request Flow
 
+*Solid path matches Implementation Status. Model Router / Evaluator are extension points — demo uses a single LLM path + golden eval CI, not a full multi-model router fleet.*
+
 ```mermaid
 sequenceDiagram
   participant U as User
@@ -112,6 +114,8 @@ sequenceDiagram
 ```
 
 ## Data and Knowledge Lifecycle
+
+*Reference target for enterprise ingestion. Free-tier demo uses in-memory hybrid corpus + optional Qdrant — not every connector / DLP / graph box below ships on Render.*
 
 ```mermaid
 flowchart TB

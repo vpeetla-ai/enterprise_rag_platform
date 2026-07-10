@@ -241,10 +241,11 @@ API surface:
 
 **Business function:** Production RAG — access-before-ranking, hybrid retrieval, citations, decline-to-answer, evals.
 
-Staff+ prep crosswalk — [playbook](https://github.com/vpeetla-ai/ai-architect-interview-playbook) · [study UI](https://ai-architect-interview-playbook-9xs.vercel.app) · [Practice Arena](https://ai-architect-practice-arena.vercel.app) · [org matrix](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/docs/REPO_INTERVIEW_MAP.md). Only entries this repo honestly exercises.
+Staff+ prep crosswalk — [playbook](https://github.com/vpeetla-ai/ai-architect-interview-playbook) · [study UI](https://ai-architect-interview-playbook.vercel.app) · [Practice Arena](https://ai-architect-practice-arena.vercel.app) · [org matrix](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/docs/REPO_INTERVIEW_MAP.md). Only entries this repo honestly exercises.
 
 | Category | Entry | Fit |
 |----------|-------|-----|
-| System design | [RAG platform at scale](https://ai-architect-interview-playbook-9xs.vercel.app/q/ai-system-design/02-rag-platform-at-scale) ([md](https://github.com/vpeetla-ai/ai-architect-interview-playbook/blob/main/ai-system-design/02-rag-platform-at-scale.md)) | Primary map — ACL filter, hybrid retrieve, rerank, citations |
-| Cloud | [Security & compliance for AI](https://ai-architect-interview-playbook-9xs.vercel.app/q/cloud-architecture/05-security-and-compliance-architecture-for-ai-systems) ([md](https://github.com/vpeetla-ai/ai-architect-interview-playbook/blob/main/cloud-architecture/05-security-and-compliance-architecture-for-ai-systems.md)) | Clearance / ACL on chunks before ranking |
-| Trade-offs | [Cost vs latency vs safety](https://ai-architect-interview-playbook-9xs.vercel.app/q/scalability-governance-tradeoffs/01-cost-vs-latency-vs-safety) ([md](https://github.com/vpeetla-ai/ai-architect-interview-playbook/blob/main/scalability-governance-tradeoffs/01-cost-vs-latency-vs-safety.md)) | Rerank vs latency; decline vs wrong answer |
+| System design | [RAG platform at scale](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/02-rag-platform-at-scale/) ([md](https://github.com/vpeetla-ai/ai-architect-interview-playbook/blob/main/ai-system-design/02-rag-platform-at-scale.md)) | Primary map — ACL filter, hybrid retrieve, rerank, citations |
+| Cloud | [Security & compliance for AI](https://ai-architect-interview-playbook.vercel.app/q/cloud-architecture/05-security-and-compliance-architecture-for-ai-systems/) ([md](https://github.com/vpeetla-ai/ai-architect-interview-playbook/blob/main/cloud-architecture/05-security-and-compliance-architecture-for-ai-systems.md)) | Clearance / ACL on chunks before ranking |
+| Trade-offs | [Cost vs latency vs safety](https://ai-architect-interview-playbook.vercel.app/q/scalability-governance-tradeoffs/01-cost-vs-latency-vs-safety/) ([md](https://github.com/vpeetla-ai/ai-architect-interview-playbook/blob/main/scalability-governance-tradeoffs/01-cost-vs-latency-vs-safety.md)) | Rerank vs latency; decline vs wrong answer |
+

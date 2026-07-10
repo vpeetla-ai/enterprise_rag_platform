@@ -219,16 +219,16 @@ API surface:
 
 ## Production Hardening Checklist
 
-- **Derive `Principal` from a verified JWT/OIDC token, not the request body** — today
-  `tenant_id`/`groups`/`clearance` are client-asserted and trivially spoofable (see
-  [ADR-0004](docs/adr/0004-api-auth-and-principal-trust.md)). This is the single most
-  important item before any real deployment; `RAG_API_KEY` only gates *who can call the API*,
-  not *who they can claim to be*.
-- Replace `InMemoryHybridRetriever` with OpenSearch plus vector-store and graph adapters.
-- Add a cross-encoder reranker and query rewrite service.
+- **JWT-verified `Principal` under `PRODUCTION_STRICT=1`** — shipped (see
+  [ADR-0006](docs/adr/0006-verified-principal-jwt-strict.md) / portfolio ADR-024).
+  Default demo still allows client-asserted Principal for lab UX; do not run demo mode
+  against real tenants. `RAG_API_KEY` alone is not identity.
+- Replace `InMemoryHybridRetriever` with OpenSearch plus vector-store and graph adapters
+  for durable multi-tenant corpora (Qdrant adapter exists; free-tier demo stays in-memory).
+- Add query rewrite / multi-hop expansion beyond the current hybrid + cross-encoder path.
 - Add embedding/model version tables and blue-green index deployment.
 - Integrate SIEM audit sinks and cost dashboards (optional — Langfuse covers trace-linked LLMOps today).
-- Add prompt/version CI gates with golden datasets.
-- Add human approval workflows for destructive or regulated actions.
+- Prompt/version CI gates — golden + adversarial suites via golden-eval-registry (partially shipped).
+- Add human approval workflows for destructive or regulated actions (AegisAI HITL bridge exists).
 - Add content retention, legal hold, and source-of-truth ownership workflows.
-- Run red-team tests for prompt injection, authorization bypass, and citation spoofing.
+- Expand red-team coverage beyond the adversarial golden suite (injection, citation spoofing).

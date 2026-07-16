@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Enterprise RAG Platform — Glass-box Demo</title>
-    <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="glassbox.css" />
+    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="glassbox.css?v=2" />
   </head>
   <body>
     <header class="app-header">
@@ -60,55 +60,60 @@
                 <path d="M0,0 L6,3 L0,6 Z" fill="var(--vp-border-strong)" />
               </marker>
             </defs>
-            <!-- Row 1: access → guard-in → retrieve -->
+            <!-- Row 1: API (pre-pipeline) → access → guard-in → retrieve -->
+            <g class="gb-node" id="gb-node-api" style="--node-color:var(--vp-danger)">
+              <rect x="8" y="24" width="72" height="44" rx="8" />
+              <text x="44" y="44" text-anchor="middle">API</text>
+              <text x="44" y="58" text-anchor="middle" style="font-size:9px;font-weight:500;opacity:0.75">auth</text>
+            </g>
+            <path class="gb-edge" d="M80 46 H96" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-access" style="--node-color:var(--gb-node-access)">
-              <rect x="8" y="24" width="88" height="44" rx="8" />
-              <text x="52" y="51" text-anchor="middle">Access</text>
+              <rect x="96" y="24" width="78" height="44" rx="8" />
+              <text x="135" y="51" text-anchor="middle">Access</text>
             </g>
-            <path class="gb-edge" d="M96 46 H118" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M174 46 H190" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-guard-in" style="--node-color:var(--gb-node-guard)">
-              <rect x="118" y="24" width="88" height="44" rx="8" />
-              <text x="162" y="51" text-anchor="middle">Input guard</text>
+              <rect x="190" y="24" width="78" height="44" rx="8" />
+              <text x="229" y="51" text-anchor="middle">Input guard</text>
             </g>
-            <path class="gb-edge" d="M206 46 H228" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M268 46 H284" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-retrieve" style="--node-color:var(--gb-node-retrieve)">
-              <rect x="228" y="24" width="88" height="44" rx="8" />
-              <text x="272" y="51" text-anchor="middle">Retrieve</text>
+              <rect x="284" y="24" width="78" height="44" rx="8" />
+              <text x="323" y="51" text-anchor="middle">Retrieve</text>
             </g>
             <!-- Row 2: graph + rerank -->
-            <path class="gb-edge" d="M272 68 V88" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M323 68 V88" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-graph" style="--node-color:var(--gb-node-graph)">
-              <rect x="228" y="88" width="88" height="44" rx="8" />
-              <text x="272" y="115" text-anchor="middle">Graph</text>
+              <rect x="279" y="88" width="88" height="44" rx="8" />
+              <text x="323" y="115" text-anchor="middle">Graph</text>
             </g>
-            <path class="gb-edge" d="M316 110 H338" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M367 110 H389" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-rerank" style="--node-color:var(--gb-node-rerank)">
-              <rect x="338" y="88" width="88" height="44" rx="8" />
-              <text x="382" y="115" text-anchor="middle">Rerank</text>
+              <rect x="389" y="88" width="88" height="44" rx="8" />
+              <text x="433" y="115" text-anchor="middle">Rerank</text>
             </g>
             <!-- Row 3: assemble → generate → guard-out -->
-            <path class="gb-edge" d="M382 132 V152" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M433 132 V152" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-assemble" style="--node-color:var(--gb-node-assemble)">
-              <rect x="338" y="152" width="88" height="44" rx="8" />
-              <text x="382" y="179" text-anchor="middle">Assemble</text>
+              <rect x="389" y="152" width="88" height="44" rx="8" />
+              <text x="433" y="179" text-anchor="middle">Assemble</text>
             </g>
-            <path class="gb-edge" d="M338 174 H316" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M389 174 H367" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-generate" style="--node-color:var(--gb-node-generate)">
-              <rect x="228" y="152" width="88" height="44" rx="8" />
-              <text x="272" y="179" text-anchor="middle">Generate</text>
+              <rect x="279" y="152" width="88" height="44" rx="8" />
+              <text x="323" y="179" text-anchor="middle">Generate</text>
             </g>
-            <path class="gb-edge" d="M228 174 H206" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M279 174 H257" marker-end="url(#arrow)" />
             <g class="gb-node" id="gb-node-guard-out" style="--node-color:var(--gb-node-guard)">
-              <rect x="118" y="152" width="88" height="44" rx="8" />
-              <text x="162" y="179" text-anchor="middle">Output guard</text>
+              <rect x="169" y="152" width="88" height="44" rx="8" />
+              <text x="213" y="179" text-anchor="middle">Output guard</text>
             </g>
             <!-- Decline branch -->
-            <path class="gb-edge" d="M272 68 H272 88" style="opacity:0" />
             <g class="gb-node" id="gb-node-decline" style="--node-color:var(--gb-node-decline)">
               <rect x="8" y="152" width="88" height="44" rx="8" />
               <text x="52" y="179" text-anchor="middle">Decline</text>
             </g>
-            <path class="gb-edge" d="M96 174 H118" marker-end="url(#arrow)" />
+            <path class="gb-edge" d="M96 174 H169" marker-end="url(#arrow)" />
           </svg>
 
           <div id="gbPills" class="gb-pills"></div>
@@ -135,11 +140,12 @@
           <div class="gb-run-row">
             <button id="ask" type="button">Ask with governance</button>
           </div>
-          <p id="status" class="muted microcopy">Submit a query to call the live API.</p>
+          <p id="status" class="status-msg is-idle">Submit a query to call the live API.</p>
           <p class="muted api-hint">API: <span id="apiUrl"></span></p>
 
           <label for="answerPanel" style="margin-top:1rem">Answer</label>
           <p id="activeQuery" class="query-label hidden"></p>
+          <span id="answerBadge" class="answer-badge hidden"></span>
           <div id="answer" class="answer panel" style="margin-top:0.35rem;padding:0.75rem;background:var(--vp-bg-subtle);border-radius:var(--vp-radius-sm);border:1px solid var(--vp-border)"></div>
 
           <label style="margin-top:0.85rem">Citations &amp; risk</label>
@@ -193,8 +199,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="config.js"></script>
     <script src="architect-config.js"></script>
-    <script src="glassbox.js"></script>
+    <script src="glassbox.js?v=2"></script>
     <script>document.getElementById("apiUrl").textContent = window.ENTERPRISE_RAG_API || "/api";</script>
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
   </body>
 </html>

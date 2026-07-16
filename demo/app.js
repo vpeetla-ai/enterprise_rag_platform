@@ -49,10 +49,68 @@ function showCompareMode() {
 
 function clearSingleResults() {
   document.getElementById("answer").textContent = "";
+  document.getElementById("answer").classList.remove("is-fallback", "is-error");
+  const badge = document.getElementById("answerBadge");
+  if (badge) {
+    badge.className = "answer-badge hidden";
+    badge.textContent = "";
+  }
   document.getElementById("citations").innerHTML = "";
   document.getElementById("riskFlags").innerHTML = "";
   document.getElementById("activeQuery").classList.add("hidden");
   document.getElementById("activeQuery").textContent = "";
+  setStatus("Submit a query to call the live API.", "idle");
+}
+
+/** @param {string} text @param {"idle"|"ok"|"warn"|"error"} severity @param {string} [detail] */
+function setStatus(text, severity, detail) {
+  const el = document.getElementById("status");
+  if (!el) return;
+  el.className = "status-msg is-" + (severity || "idle");
+  el.textContent = text;
+  if (detail) {
+    const d = document.createElement("span");
+    d.className = "status-detail";
+    d.textContent = detail;
+    el.appendChild(d);
+  }
+}
+
+function humanizeApiError(raw) {
+  const msg = String(raw || "");
+  if (/X-API-Key|api[_ ]?key|Invalid or missing/i.test(msg)) {
+    return {
+      title: "API key required or invalid",
+      detail: msg,
+      hint: "Open Advanced → paste X-API-Key, or the backend may require RAG_API_KEY.",
+    };
+  }
+  if (/not reachable|waking|Failed to fetch|NetworkError|timeout/i.test(msg)) {
+    return {
+      title: "API not reachable",
+      detail: msg,
+      hint: "Render free tier may still be waking (~30–90s). Retry shortly.",
+    };
+  }
+  return { title: "API request failed", detail: msg, hint: null };
+}
+
+function setAnswerTone(tone, label) {
+  const answer = document.getElementById("answer");
+  const badge = document.getElementById("answerBadge");
+  answer.classList.remove("is-fallback", "is-error");
+  if (tone === "fallback") answer.classList.add("is-fallback");
+  if (tone === "error") answer.classList.add("is-error");
+  if (badge) {
+    if (label) {
+      badge.textContent = label;
+      badge.className = "answer-badge is-" + (tone === "live" ? "live" : "fallback");
+      badge.classList.remove("hidden");
+    } else {
+      badge.className = "answer-badge hidden";
+      badge.textContent = "";
+    }
+  }
 }
 
 function syncGlassBoxStrategy() {
@@ -111,7 +169,7 @@ async function callRetrieve(query, strategy) {
 function render(data, mode, query) {
   showSingleMode();
   clearSingleResults();
-  document.getElementById("status").textContent = mode;
+  setStatus(mode, "ok");
   if (query) {
     const qEl = document.getElementById("activeQuery");
     qEl.textContent = `Question: ${query}`;
@@ -119,6 +177,7 @@ function render(data, mode, query) {
   }
   const answer = data.answer || JSON.stringify(data.hits?.slice(0, 3), null, 2);
   document.getElementById("answer").textContent = answer;
+  setAnswerTone("live", "live");
   const citations = document.getElementById("citations");
   (data.citations || []).forEach((c) => {
     const li = document.createElement("li");
@@ -292,35 +351,45 @@ async function testAllStrategies() {
 document.getElementById("ask").addEventListener("click", async () => {
   const query = document.getElementById("query").value.trim();
   if (!query) {
-    document.getElementById("status").textContent = "Enter a question first.";
+    setStatus("Enter a question first.", "warn");
     return;
   }
   const strategy = syncGlassBoxStrategy();
   showSingleMode();
   clearSingleResults();
-  document.getElementById("status").textContent = `Calling /v1/answer (${strategy.label})…`;
+  setStatus(`Calling /v1/answer (${strategy.label})…`, "idle");
   window.GlassBox?.showRunning();
   try {
     if (!(await wakeApi())) throw new Error("API not reachable — Render may still be waking up");
     const data = await callAnswer(query, strategy);
     if (!data.answer?.trim() || data.answer.includes("do not have enough authorized context")) {
-      document.getElementById("status").textContent =
-        `No matching chunks — try keywords from your document (${strategy.label})`;
+      setStatus(
+        `No matching chunks — try keywords from your document (${strategy.label})`,
+        "warn"
+      );
       document.getElementById("activeQuery").textContent = `Question: ${query}`;
       document.getElementById("activeQuery").classList.remove("hidden");
       document.getElementById("answer").textContent =
         "No authorized context found for this query. Re-ingest your document or use terms that appear in it.";
+      setAnswerTone("fallback", "no context");
       replayGlassBox({ ...data, trace: data.trace || [] }, "live");
     } else {
       render(data, `Grounded answer — ${strategy.label}`, query);
     }
   } catch (error) {
-    document.getElementById("status").textContent = `API error: ${error.message} — showing demo_fallback trace`;
+    const h = humanizeApiError(error.message);
+    setStatus(
+      h.title + " — showing demo_fallback (not a live run)",
+      "error",
+      (h.hint ? h.hint + " · " : "") + h.detail
+    );
     document.getElementById("activeQuery").textContent = `Question: ${query}`;
     document.getElementById("activeQuery").classList.remove("hidden");
+    window.GlassBox?.showApiFailure(h.title);
     const demo = window.GlassBox?.demoAnswer;
     if (demo) {
       document.getElementById("answer").textContent = demo.answer;
+      setAnswerTone("fallback", "demo_fallback");
       replayGlassBox(demo, "fallback");
     }
   }
@@ -329,13 +398,13 @@ document.getElementById("ask").addEventListener("click", async () => {
 document.getElementById("retrieve").addEventListener("click", async () => {
   const query = document.getElementById("query").value.trim();
   if (!query) {
-    document.getElementById("status").textContent = "Enter a question first.";
+    setStatus("Enter a question first.", "warn");
     return;
   }
   const strategy = syncGlassBoxStrategy();
   showSingleMode();
   clearSingleResults();
-  document.getElementById("status").textContent = `Calling /v1/retrieve (${strategy.label})…`;
+  setStatus(`Calling /v1/retrieve (${strategy.label})…`, "idle");
   window.GlassBox?.showRunning();
   try {
     if (!(await wakeApi())) throw new Error("API not reachable — Render may still be waking up");
@@ -353,9 +422,11 @@ document.getElementById("retrieve").addEventListener("click", async () => {
       query
     );
   } catch (error) {
-    document.getElementById("status").textContent = `API error: ${error.message}`;
+    const h = humanizeApiError(error.message);
+    setStatus(h.title, "error", h.detail);
     document.getElementById("activeQuery").textContent = `Question: ${query}`;
     document.getElementById("activeQuery").classList.remove("hidden");
+    window.GlassBox?.showApiFailure(h.title);
   }
 });
 

@@ -1,6 +1,11 @@
 /**
  * Enterprise RAG glass-box — architecture rail (left), pipeline replay (center), product UX (right).
  * Trace replay from POST /v1/answer events (not SSE).
+ *
+ * Severity (honest):
+ * - Green  gb-done     = live authenticated span completed
+ * - Amber  gb-fallback = demo_fallback / degraded replay (not live)
+ * - Red    gb-error    = hard failure at this stage (API auth, decline)
  */
 (function (global) {
   const NODE_MAP = {
@@ -15,6 +20,7 @@
   };
 
   const PILL_STEPS = [
+    { id: "api", label: "API", color: "var(--vp-danger)" },
     { id: "access", label: "Access", color: "var(--gb-node-access)" },
     { id: "retrieve", label: "Retrieve", color: "var(--gb-node-retrieve)" },
     { id: "graph", label: "Graph", color: "var(--gb-node-graph)" },
@@ -46,6 +52,8 @@
     ],
     trace: DEMO_TRACE,
   };
+
+  const NODE_STATES = ["gb-active", "gb-done", "gb-fallback", "gb-error"];
 
   function $(id) {
     return document.getElementById(id);
@@ -151,38 +159,46 @@
     ).join("");
   }
 
+  function clearNodeStates(el) {
+    if (!el) return;
+    NODE_STATES.forEach((c) => el.classList.remove(c));
+  }
+
   function resetDiagram(strategy) {
     document.querySelectorAll(".gb-node").forEach((n) => {
-      n.classList.remove("gb-active", "gb-done", "gb-skipped");
+      clearNodeStates(n);
+      n.classList.remove("gb-skipped");
     });
-    PILL_STEPS.forEach((s) => {
-      const pill = $("gb-pill-" + s.id);
-      if (pill) pill.classList.remove("gb-active", "gb-done");
-    });
+    PILL_STEPS.forEach((s) => clearNodeStates($("gb-pill-" + s.id)));
     const graph = $("gb-node-graph");
     const rerank = $("gb-node-rerank");
     if (graph) graph.classList.toggle("gb-skipped", !strategy?.agentic);
     if (rerank) rerank.classList.toggle("gb-skipped", !strategy?.rerank);
     const gate = $("gbGate");
     if (gate) {
-      gate.classList.remove("decline");
+      gate.classList.remove("decline", "is-error", "is-fallback");
       gate.textContent = "Access-before-ranking — principal groups filter chunks before hybrid scores.";
     }
     const log = $("gbEventLog");
     if (log) log.textContent = "";
     setSourceBadge(null);
+    const center = document.querySelector(".gb-center");
+    if (center) center.classList.remove("is-fallback-mode", "is-error-mode");
   }
 
   function setSourceBadge(mode) {
     const el = $("gbSource");
     if (!el) return;
-    el.classList.remove("live", "fallback");
+    el.classList.remove("live", "fallback", "error");
     if (mode === "live") {
       el.textContent = "live trace";
       el.classList.add("live");
     } else if (mode === "fallback") {
       el.textContent = "demo_fallback";
       el.classList.add("fallback");
+    } else if (mode === "error") {
+      el.textContent = "API failed";
+      el.classList.add("error");
     } else {
       el.textContent = "awaiting run";
     }
@@ -191,39 +207,45 @@
   function markNode(nodeId, state) {
     const node = $("gb-node-" + nodeId);
     if (node) {
-      node.classList.remove("gb-active", "gb-done");
+      clearNodeStates(node);
       if (state) node.classList.add(state);
     }
     const pillId =
-      nodeId === "guard-in" || nodeId === "access"
-        ? "access"
-        : nodeId === "guard-out"
-          ? "guard-out"
-          : nodeId === "decline"
-            ? null
-            : nodeId;
+      nodeId === "api"
+        ? "api"
+        : nodeId === "guard-in" || nodeId === "access"
+          ? "access"
+          : nodeId === "guard-out"
+            ? "guard-out"
+            : nodeId === "decline"
+              ? null
+              : nodeId;
     if (pillId) {
       const pill = $("gb-pill-" + pillId);
       if (pill) {
-        pill.classList.remove("gb-active", "gb-done");
+        clearNodeStates(pill);
         if (state) pill.classList.add(state);
       }
     }
   }
 
-  function setGate(text, declined) {
+  /** @param {string} text @param {{declined?:boolean, fallback?:boolean, error?:boolean}} [opts] */
+  function setGate(text, opts) {
     const gate = $("gbGate");
     if (!gate) return;
+    const o = typeof opts === "boolean" ? { declined: opts } : opts || {};
     gate.textContent = text;
-    gate.classList.toggle("decline", !!declined);
+    gate.classList.toggle("decline", !!o.declined);
+    gate.classList.toggle("is-error", !!o.error);
+    gate.classList.toggle("is-fallback", !!o.fallback && !o.error && !o.declined);
   }
 
-  function appendEvent(ev) {
+  function appendEvent(ev, tone) {
     const log = $("gbEventLog");
     if (!log) return;
     const ms = ev.duration_ms != null ? ` ${ev.duration_ms}ms` : "";
     const line = document.createElement("div");
-    line.className = "ev-live";
+    line.className = tone === "fallback" ? "ev-fallback" : tone === "error" ? "ev-error" : "ev-live";
     line.textContent = `▸ ${ev.name}${ms}`;
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
@@ -250,11 +272,24 @@
   function playTrace(trace, strategy, opts) {
     const events = Array.isArray(trace) ? trace : [];
     const stepMs = opts?.stepMs ?? 340;
+    const isFallback = opts?.source === "fallback";
+    const doneClass = isFallback ? "gb-fallback" : "gb-done";
     let i = 0;
 
     function step() {
       if (i >= events.length) {
-        setOps(events, opts?.data);
+        // Finalize last active node
+        if (events.length) {
+          const last = NODE_MAP[events[events.length - 1].name];
+          if (last) markNode(last, doneClass);
+        }
+        if (isFallback) {
+          setGate(
+            "demo_fallback complete — canned teaching replay, not a live authenticated run. Fix API key / wake Render for live spans.",
+            { fallback: true }
+          );
+        }
+        setOps(events, opts?.data, isFallback);
         return;
       }
       const ev = events[i];
@@ -262,26 +297,52 @@
       if (nodeId) {
         if (i > 0) {
           const prev = NODE_MAP[events[i - 1].name];
-          if (prev) markNode(prev, "gb-done");
+          if (prev) markNode(prev, doneClass);
         }
         markNode(nodeId, "gb-active");
-        if (ev.name === "rag.retrieve") markNode("access", "gb-done");
+        if (ev.name === "rag.retrieve") markNode("access", doneClass);
       }
-      setGate(gateMessage(ev), ev.name === "rag.decline");
-      appendEvent(ev);
+      const declined = ev.name === "rag.decline";
+      setGate(gateMessage(ev), {
+        declined,
+        fallback: isFallback && !declined,
+      });
+      appendEvent(ev, isFallback ? "fallback" : "live");
       i += 1;
       setTimeout(step, stepMs);
     }
 
     resetDiagram(strategy);
+    if (isFallback) {
+      // Auth already failed — keep API pill red while amber-replaying the rest
+      markNode("api", "gb-error");
+      const center = document.querySelector(".gb-center");
+      if (center) center.classList.add("is-fallback-mode");
+      setSourceBadge("fallback");
+      setGate(
+        "API auth failed (pre-pipeline) — replaying canned demo_fallback in amber. Green is reserved for live runs.",
+        { fallback: true }
+      );
+      const log = $("gbEventLog");
+      if (log) {
+        log.innerHTML = "";
+        const line = document.createElement("div");
+        line.className = "ev-error";
+        line.textContent = "▸ api.auth FAILED — using demo_fallback";
+        log.appendChild(line);
+      }
+    } else {
+      markNode("api", "gb-done");
+    }
+
     if (!events.length) {
-      setGate("No trace events in response.", false);
+      setGate("No trace events in response.", { error: true });
       return;
     }
-    step();
+    setTimeout(step, isFallback ? 420 : 80);
   }
 
-  function setOps(trace, data) {
+  function setOps(trace, data, isFallback) {
     const el = $("gbOps");
     if (!el) return;
     const ms = totalMs(trace);
@@ -291,20 +352,51 @@
       `<span><strong>latency</strong> ${ms != null ? ms + " ms" : "n/a"}</span>`,
       `<span><strong>grounded</strong> ${data?.grounded ? "yes" : "no"}</span>`,
       data?.declined ? `<span><strong>declined</strong> yes</span>` : "",
+      isFallback ? `<span class="ops-fallback"><strong>mode</strong> demo_fallback</span>` : "",
     ]
       .filter(Boolean)
       .join("");
   }
 
   function onAnswer(data, strategy, source) {
-    setSourceBadge(source === "fallback" ? "fallback" : "live");
-    playTrace(data.trace || [], strategy, { data, stepMs: source === "fallback" ? 280 : 340 });
-    loadMetrics();
+    const isFallback = source === "fallback";
+    setSourceBadge(isFallback ? "fallback" : "live");
+    playTrace(data.trace || [], strategy, {
+      data,
+      source: isFallback ? "fallback" : "live",
+      stepMs: isFallback ? 280 : 340,
+    });
+    if (!isFallback) loadMetrics();
+  }
+
+  /** Call before fallback replay — paints API pill red. */
+  function showApiFailure(reason) {
+    setSourceBadge("error");
+    markNode("api", "gb-error");
+    const center = document.querySelector(".gb-center");
+    if (center) {
+      center.classList.add("is-error-mode");
+      center.classList.add("is-fallback-mode");
+    }
+    setGate(
+      (reason || "API request failed") +
+        " — this is before Access / Retrieve. Pipeline below will replay a canned demo_fallback (amber), not live spans.",
+      { error: true }
+    );
+    const log = $("gbEventLog");
+    if (log) {
+      log.innerHTML = "";
+      const line = document.createElement("div");
+      line.className = "ev-error";
+      line.textContent = "▸ api.auth / transport FAILED";
+      log.appendChild(line);
+    }
   }
 
   function showRunning() {
     setSourceBadge(null);
     resetDiagram(global.GlassBox?.lastStrategy);
+    markNode("api", "gb-active");
     setGate("Calling /v1/answer — pipeline trace will replay when response returns.", false);
     const log = $("gbEventLog");
     if (log) log.textContent = "waiting for API…";
@@ -321,6 +413,7 @@
     resetDiagram,
     onAnswer,
     showRunning,
+    showApiFailure,
     demoAnswer: DEMO_ANSWER,
     lastStrategy: null,
     setStrategy(s) {

@@ -219,6 +219,12 @@
   border-color: rgba(217, 119, 6, 0.25);
 }
 
+.gb-source-badge.error {
+  background: var(--vp-danger-subtle);
+  color: var(--vp-danger);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
 .gb-pipeline-svg {
   width: 100%;
   flex: 1;
@@ -253,6 +259,27 @@
   fill: color-mix(in srgb, var(--vp-success) 8%, var(--vp-bg-subtle));
 }
 
+/* Amber = demo_fallback / degraded replay (not a live success) */
+.gb-node.gb-fallback rect {
+  stroke: var(--vp-warning);
+  fill: color-mix(in srgb, var(--vp-warning) 10%, var(--vp-bg-subtle));
+}
+
+.gb-node.gb-fallback text {
+  fill: var(--vp-warning);
+}
+
+/* Red = hard failure at this stage (API auth, decline, etc.) */
+.gb-node.gb-error rect {
+  stroke: var(--vp-danger);
+  fill: color-mix(in srgb, var(--vp-danger) 10%, var(--vp-bg-subtle));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--vp-danger) 35%, transparent));
+}
+
+.gb-node.gb-error text {
+  fill: var(--vp-danger);
+}
+
 .gb-edge {
   stroke: var(--vp-border-strong);
   stroke-width: 1.5;
@@ -275,10 +302,17 @@
   min-height: 2.4rem;
 }
 
-.gb-gate.decline {
+.gb-gate.decline,
+.gb-gate.is-error {
   background: var(--vp-danger-subtle);
   border-color: rgba(220, 38, 38, 0.25);
   color: var(--vp-danger);
+}
+
+.gb-gate.is-fallback {
+  background: var(--vp-warning-subtle);
+  border-color: rgba(217, 119, 6, 0.3);
+  color: #92400e;
 }
 
 .gb-pills {
@@ -310,6 +344,94 @@
   background: var(--vp-success-subtle);
 }
 
+.gb-pill.gb-fallback {
+  border-color: var(--vp-warning);
+  color: var(--vp-warning);
+  background: var(--vp-warning-subtle);
+}
+
+.gb-pill.gb-error {
+  border-color: var(--vp-danger);
+  color: var(--vp-danger);
+  background: var(--vp-danger-subtle);
+}
+
+/* Product-panel status severity */
+.status-msg {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--vp-radius-sm);
+  border: 1px solid transparent;
+}
+
+.status-msg.is-idle {
+  color: var(--vp-text-muted);
+  padding: 0;
+  border: none;
+}
+
+.status-msg.is-ok {
+  background: var(--vp-success-subtle);
+  border-color: rgba(5, 150, 105, 0.25);
+  color: var(--vp-success);
+}
+
+.status-msg.is-warn {
+  background: var(--vp-warning-subtle);
+  border-color: rgba(217, 119, 6, 0.3);
+  color: #92400e;
+}
+
+.status-msg.is-error {
+  background: var(--vp-danger-subtle);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--vp-danger);
+}
+
+.status-msg .status-detail {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--vp-mono);
+  font-size: 0.68rem;
+  opacity: 0.85;
+  word-break: break-word;
+}
+
+.answer.is-fallback {
+  border-color: rgba(217, 119, 6, 0.4) !important;
+  background: var(--vp-warning-subtle) !important;
+}
+
+.answer.is-error {
+  border-color: rgba(220, 38, 38, 0.35) !important;
+  background: var(--vp-danger-subtle) !important;
+}
+
+.answer-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  margin-bottom: 0.35rem;
+}
+
+.answer-badge.is-fallback {
+  background: var(--vp-warning-subtle);
+  color: var(--vp-warning);
+  border: 1px solid rgba(217, 119, 6, 0.3);
+}
+
+.answer-badge.is-live {
+  background: var(--vp-success-subtle);
+  color: var(--vp-success);
+  border: 1px solid rgba(5, 150, 105, 0.25);
+}
+
 .gb-pill-arrow {
   color: var(--vp-text-muted);
   font-size: 0.65rem;
@@ -328,8 +450,12 @@
   color: var(--vp-text-muted);
 }
 
-.gb-event-log .ev-live {
-  color: var(--vp-accent);
+.gb-event-log .ev-live { color: var(--vp-accent); }
+.gb-event-log .ev-fallback { color: var(--vp-warning); }
+.gb-event-log .ev-error { color: var(--vp-danger); font-weight: 600; }
+
+.gb-ops-strip .ops-fallback {
+  color: var(--vp-warning);
 }
 
 .gb-product {

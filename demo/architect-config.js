@@ -1,6 +1,6 @@
 window.ARCHITECT_CONFIG = {
   tagline:
-    "Access-before-ranking RAG: principals filter chunks before hybrid retrieval scores them. Citations and decline gates prove governance, not just retrieval.",
+    "Glass-box RAG: access-before-ranking stays visible while pipeline spans replay from /v1/answer.",
   metricsUrl: (window.ENTERPRISE_RAG_API || "") + "/v1/ops/metrics",
   metricsPath: "/v1/ops/metrics",
   metricLabels: { runs: "Queries + answers", entities: "Indexed chunks", latency: "P95 latency" },

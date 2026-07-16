@@ -121,7 +121,17 @@ Canonical org pattern: [TRACE_LINKED_OBSERVABILITY](https://github.com/vpeetla-a
 
 | Surface | Host | Notes |
 |---------|------|-------|
-| Demo UI | Vercel | Static + API proxy |
+| Demo UI | Vercel | Static `demo/` — glass-box workbench + API proxy |
+
+### Glass-box demo layout
+
+| Column | Role |
+|--------|------|
+| **Left** | Stack layers, live metrics (`/v1/ops/metrics`), tradeoffs, ADR links |
+| **Center** | RAG pipeline SVG — trace span replay from `/v1/answer` |
+| **Right** | Product UX — query, strategy, answer, citations, risk flags |
+
+Replay is post-response animation (not SSE). Eval compare and ingest stay in collapsed sections below the workbench.
 | API | Render / local | FastAPI, env-driven LLM keys |
 
 ---

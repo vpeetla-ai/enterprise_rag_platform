@@ -40,24 +40,35 @@ const payload = (query, strategy = strategyFromUi()) => ({
 });
 
 function showSingleMode() {
-  document.getElementById("singleResult").classList.remove("hidden");
   document.getElementById("compareResults").classList.add("hidden");
-  document.querySelector("#trace")?.closest(".panel")?.classList.remove("hidden");
 }
 
 function showCompareMode() {
-  document.getElementById("singleResult").classList.add("hidden");
   document.getElementById("compareResults").classList.remove("hidden");
-  document.querySelector("#trace")?.closest(".panel")?.classList.add("hidden");
 }
 
 function clearSingleResults() {
   document.getElementById("answer").textContent = "";
   document.getElementById("citations").innerHTML = "";
   document.getElementById("riskFlags").innerHTML = "";
-  document.getElementById("trace").textContent = "";
   document.getElementById("activeQuery").classList.add("hidden");
   document.getElementById("activeQuery").textContent = "";
+}
+
+function syncGlassBoxStrategy() {
+  const strategy = strategyFromUi();
+  if (window.GlassBox) {
+    window.GlassBox.setStrategy(strategy);
+    window.GlassBox.resetDiagram(strategy);
+  }
+  return strategy;
+}
+
+function replayGlassBox(data, source) {
+  const strategy = strategyFromUi();
+  if (window.GlassBox) {
+    window.GlassBox.onAnswer(data, strategy, source);
+  }
 }
 
 async function wakeApi(maxAttempts = 4) {
@@ -121,7 +132,7 @@ function render(data, mode, query) {
     span.textContent = flag;
     flags.appendChild(span);
   });
-  document.getElementById("trace").textContent = JSON.stringify(data.trace || data, null, 2);
+  replayGlassBox(data, "live");
 }
 
 function pipelineHtml(trace) {
@@ -284,10 +295,11 @@ document.getElementById("ask").addEventListener("click", async () => {
     document.getElementById("status").textContent = "Enter a question first.";
     return;
   }
-  const strategy = strategyFromUi();
+  const strategy = syncGlassBoxStrategy();
   showSingleMode();
   clearSingleResults();
   document.getElementById("status").textContent = `Calling /v1/answer (${strategy.label})…`;
+  window.GlassBox?.showRunning();
   try {
     if (!(await wakeApi())) throw new Error("API not reachable — Render may still be waking up");
     const data = await callAnswer(query, strategy);
@@ -298,15 +310,19 @@ document.getElementById("ask").addEventListener("click", async () => {
       document.getElementById("activeQuery").classList.remove("hidden");
       document.getElementById("answer").textContent =
         "No authorized context found for this query. Re-ingest your document or use terms that appear in it.";
-      document.getElementById("trace").textContent = JSON.stringify(data.trace || [], null, 2);
+      replayGlassBox({ ...data, trace: data.trace || [] }, "live");
     } else {
       render(data, `Grounded answer — ${strategy.label}`, query);
     }
   } catch (error) {
-    document.getElementById("status").textContent = `API error: ${error.message}`;
+    document.getElementById("status").textContent = `API error: ${error.message} — showing demo_fallback trace`;
     document.getElementById("activeQuery").textContent = `Question: ${query}`;
     document.getElementById("activeQuery").classList.remove("hidden");
-    document.getElementById("answer").textContent = "";
+    const demo = window.GlassBox?.demoAnswer;
+    if (demo) {
+      document.getElementById("answer").textContent = demo.answer;
+      replayGlassBox(demo, "fallback");
+    }
   }
 });
 
@@ -316,15 +332,23 @@ document.getElementById("retrieve").addEventListener("click", async () => {
     document.getElementById("status").textContent = "Enter a question first.";
     return;
   }
-  const strategy = strategyFromUi();
+  const strategy = syncGlassBoxStrategy();
   showSingleMode();
   clearSingleResults();
   document.getElementById("status").textContent = `Calling /v1/retrieve (${strategy.label})…`;
+  window.GlassBox?.showRunning();
   try {
     if (!(await wakeApi())) throw new Error("API not reachable — Render may still be waking up");
     const data = await callRetrieve(query, strategy);
+    const synth = {
+      hits: data.hits,
+      trace: [
+        { name: "rag.guardrails.input", attributes: { status: "ok" }, duration_ms: 1 },
+        { name: "rag.retrieve", attributes: { mode: strategy.mode, status: "ok" }, duration_ms: 14 },
+      ],
+    };
     render(
-      { hits: data.hits, trace: data },
+      synth,
       `Retrieval hits — ${strategy.label} (${data.hits?.length || 0} hits)`,
       query
     );
@@ -354,6 +378,9 @@ document.getElementById("loadSample").addEventListener("click", async () => {
 });
 
 document.getElementById("testAll").addEventListener("click", testAllStrategies);
+
+document.getElementById("ragMode")?.addEventListener("change", syncGlassBoxStrategy);
+syncGlassBoxStrategy();
 
 if (window.pdfjsLib) {
   window.pdfjsLib.GlobalWorkerOptions.workerSrc =

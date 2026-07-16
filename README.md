@@ -55,6 +55,7 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | Langfuse trace export | **Implemented** | `ops/langfuse_export.py` — pipeline spans + eval scores on `/v1/answer` |
 | Knowledge graph expansion | **Implemented** | `InMemoryGraphExpander` + ingest entity tagging |
 | API-key gate on `/v1/ingest`, `/v1/retrieve`, `/v1/answer` | **Implemented** | Set `RAG_API_KEY` on Render — these previously had zero caller auth at all |
+| Glass-box demo UX | **Implemented** | `demo/glassbox.js` — architecture rail + pipeline replay + product panel; trace from `/v1/answer` (replay, not SSE) |
 
 See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, AegisAI, and AgentOps.
 

@@ -2,7 +2,13 @@
 
 **Live demo (vpeetla-ai team):** [enterprise-rag-platform-eta.vercel.app](https://enterprise-rag-platform-eta.vercel.app)
 
+> **Vercel project:** `enterprise-rag-platform` (not the shared `demo` project used by LoopForge). Link before deploy: `cd demo && vercel link --project enterprise-rag-platform`
+
 > `enterprise-rag-platform.vercel.app` may point at a stale deployment. The team URL above uses [`demo/config.js`](../demo/config.js) to call Render directly (CORS enabled on API).
+
+## Glass-box UX
+
+The demo uses a **three-column workbench** (architecture rail · pipeline replay · product Q&A). Center diagram animates `trace` spans from `POST /v1/answer` — **replay after response**, not live SSE. Left rail shows stack layers, live `/v1/ops/metrics`, and ADR links without hiding the product flow.
 
 | Surface | URL |
 |---------|-----|
@@ -13,9 +19,8 @@
 
 ```bash
 # API on Render — apply render.yaml blueprint
-# UI on Vercel — deploy static demo folder (avoids FastAPI auto-detect):
-cd demo && npx vercel --prod
-npx vercel alias set <deployment-url> enterprise-rag-platform.vercel.app
+# UI on Vercel — link to enterprise-rag-platform project, then deploy:
+cd demo && vercel link --project enterprise-rag-platform && npx vercel --prod
 ```
 
 `vercel.json` rewrites `/api/*` to the Render API. Demo ships with seeded `policy-001` corpus — no vector DB required.

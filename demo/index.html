@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Enterprise RAG Platform — Live Demo</title>
-    <link rel="stylesheet" href="architect-panel.css" />
+    <title>Enterprise RAG Platform — Glass-box Demo</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="glassbox.css" />
   </head>
   <body>
     <header class="app-header">
-      <div class="app-header__inner">
+      <div class="app-header__inner" style="max-width: var(--gb-max-w)">
         <a href="/" class="brand">
           <div class="brand__mark">ER</div>
           <div class="brand__text">
@@ -23,86 +23,177 @@
         </div>
       </div>
     </header>
-    <main class="shell app-main">
-      <div class="page-hero">
-        <p class="eyebrow">Governed knowledge layer</p>
-        <h1>Enterprise RAG Platform</h1>
-        <p class="lede">Access-aware hybrid retrieval, grounded citations, guardrails, and optional AegisAI HITL bridge.</p>
+
+    <div class="gb-shell">
+      <div class="gb-hero page-hero">
+        <p class="eyebrow">Access-before-ranking · glass-box</p>
+        <h1>Watch retrieval governance, not just answers</h1>
+        <p class="lede">Architecture and live metrics stay visible while you run governed Q&amp;A. Center pipeline replays trace spans from <code>/v1/answer</code> (replay, not SSE).</p>
       </div>
 
-      <div id="workbench-product">
-      <section class="panel">
-        <h2>Ask a question</h2>
-        <p class="muted"><strong>1.</strong> Ask on the seeded corpus → <strong>2.</strong> Inspect citations &amp; risk → <strong>3.</strong> Optionally ingest your own doc.</p>
-        <label for="query">Enterprise question</label>
-        <textarea id="query" rows="3">What is the mandatory API key rotation period at Zephyr Corporation?</textarea>
-        <label for="ragMode">Retrieval strategy</label>
-        <select id="ragMode">
-          <option value="regular">Regular RAG (keyword, no graph)</option>
-          <option value="hybrid" selected>Hybrid RAG (lexical + semantic)</option>
-          <option value="agentic">Agentic RAG (hybrid + graph expansion)</option>
-        </select>
-        <div class="row row-actions">
-          <button id="ask" type="button">Ask with governance</button>
-        </div>
-        <details style="margin-top:0.85rem">
-          <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--vp-text-secondary)">Eval tools (retrieve · compare strategies)</summary>
-          <div class="row row-actions" style="margin-top:0.65rem">
-            <button id="retrieve" type="button" class="ghost">Retrieve only</button>
-            <button id="testAll" type="button" class="ghost">Test all 3 strategies</button>
-          </div>
-        </details>
-        <p class="muted api-hint">API: <span id="apiUrl"></span></p>
-      </section>
+      <div class="gb-workbench">
+        <!-- LEFT: architecture + metrics -->
+        <aside class="gb-rail" aria-label="Architecture and metrics">
+          <h2>Stack</h2>
+          <div id="gbStack"></div>
 
-      <section class="grid" id="singleResult">
-        <article class="panel" id="answerPanel">
-          <h2>Answer</h2>
-          <p id="status" class="muted">Submit a query to call the live API (demo corpus seeded).</p>
+          <h2 style="margin-top:0.85rem">Live metrics</h2>
+          <div id="gbMetrics" class="gb-metrics"><p class="muted">Loading…</p></div>
+
+          <h2>Tradeoffs</h2>
+          <div id="gbTradeoffs"></div>
+
+          <h2 style="margin-top:0.75rem">ADRs</h2>
+          <ul id="gbAdrLinks" class="gb-adr-links"></ul>
+        </aside>
+
+        <!-- CENTER: pipeline diagram + trace replay -->
+        <section class="gb-center" aria-label="RAG pipeline glass-box">
+          <div class="gb-center-head">
+            <h2>RAG pipeline · trace replay</h2>
+            <span id="gbSource" class="gb-source-badge">awaiting run</span>
+          </div>
+
+          <svg class="gb-pipeline-svg" id="gbPipelineSvg" viewBox="0 0 520 300" role="img" aria-label="RAG pipeline diagram">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="var(--vp-border-strong)" />
+              </marker>
+            </defs>
+            <!-- Row 1: access → guard-in → retrieve -->
+            <g class="gb-node" id="gb-node-access" style="--node-color:var(--gb-node-access)">
+              <rect x="8" y="24" width="88" height="44" rx="8" />
+              <text x="52" y="51" text-anchor="middle">Access</text>
+            </g>
+            <path class="gb-edge" d="M96 46 H118" marker-end="url(#arrow)" />
+            <g class="gb-node" id="gb-node-guard-in" style="--node-color:var(--gb-node-guard)">
+              <rect x="118" y="24" width="88" height="44" rx="8" />
+              <text x="162" y="51" text-anchor="middle">Input guard</text>
+            </g>
+            <path class="gb-edge" d="M206 46 H228" marker-end="url(#arrow)" />
+            <g class="gb-node" id="gb-node-retrieve" style="--node-color:var(--gb-node-retrieve)">
+              <rect x="228" y="24" width="88" height="44" rx="8" />
+              <text x="272" y="51" text-anchor="middle">Retrieve</text>
+            </g>
+            <!-- Row 2: graph + rerank -->
+            <path class="gb-edge" d="M272 68 V88" marker-end="url(#arrow)" />
+            <g class="gb-node" id="gb-node-graph" style="--node-color:var(--gb-node-graph)">
+              <rect x="228" y="88" width="88" height="44" rx="8" />
+              <text x="272" y="115" text-anchor="middle">Graph</text>
+            </g>
+            <path class="gb-edge" d="M316 110 H338" marker-end="url(#arrow)" />
+            <g class="gb-node" id="gb-node-rerank" style="--node-color:var(--gb-node-rerank)">
+              <rect x="338" y="88" width="88" height="44" rx="8" />
+              <text x="382" y="115" text-anchor="middle">Rerank</text>
+            </g>
+            <!-- Row 3: assemble → generate → guard-out -->
+            <path class="gb-edge" d="M382 132 V152" marker-end="url(#arrow)" />
+            <g class="gb-node" id="gb-node-assemble" style="--node-color:var(--gb-node-assemble)">
+              <rect x="338" y="152" width="88" height="44" rx="8" />
+              <text x="382" y="179" text-anchor="middle">Assemble</text>
+            </g>
+            <path class="gb-edge" d="M338 174 H316" marker-end="url(#arrow)" />
+            <g class="gb-node" id="gb-node-generate" style="--node-color:var(--gb-node-generate)">
+              <rect x="228" y="152" width="88" height="44" rx="8" />
+              <text x="272" y="179" text-anchor="middle">Generate</text>
+            </g>
+            <path class="gb-edge" d="M228 174 H206" marker-end="url(#arrow)" />
+            <g class="gb-node" id="gb-node-guard-out" style="--node-color:var(--gb-node-guard)">
+              <rect x="118" y="152" width="88" height="44" rx="8" />
+              <text x="162" y="179" text-anchor="middle">Output guard</text>
+            </g>
+            <!-- Decline branch -->
+            <path class="gb-edge" d="M272 68 H272 88" style="opacity:0" />
+            <g class="gb-node" id="gb-node-decline" style="--node-color:var(--gb-node-decline)">
+              <rect x="8" y="152" width="88" height="44" rx="8" />
+              <text x="52" y="179" text-anchor="middle">Decline</text>
+            </g>
+            <path class="gb-edge" d="M96 174 H118" marker-end="url(#arrow)" />
+          </svg>
+
+          <div id="gbPills" class="gb-pills"></div>
+          <div id="gbGate" class="gb-gate">Access-before-ranking — principal groups filter chunks before hybrid scores.</div>
+          <div id="gbEventLog" class="gb-event-log" aria-live="polite"></div>
+          <div id="gbOps" class="gb-ops-strip"></div>
+        </section>
+
+        <!-- RIGHT: product UX -->
+        <aside class="gb-product" id="workbench-product" aria-label="Governed Q&A">
+          <h2>Governed Q&amp;A</h2>
+          <p class="gb-guided"><strong>1.</strong> Ask on the seeded corpus → <strong>2.</strong> Watch the center pipeline highlight → <strong>3.</strong> Inspect citations &amp; risk below.</p>
+
+          <label for="query">Enterprise question</label>
+          <textarea id="query" rows="3">What is the mandatory API key rotation period at Zephyr Corporation?</textarea>
+
+          <label for="ragMode">Retrieval strategy</label>
+          <select id="ragMode">
+            <option value="regular">Regular RAG (keyword)</option>
+            <option value="hybrid" selected>Hybrid RAG (lexical + semantic)</option>
+            <option value="agentic">Agentic RAG (hybrid + graph)</option>
+          </select>
+
+          <div class="gb-run-row">
+            <button id="ask" type="button">Ask with governance</button>
+          </div>
+          <p id="status" class="muted microcopy">Submit a query to call the live API.</p>
+          <p class="muted api-hint">API: <span id="apiUrl"></span></p>
+
+          <label for="answerPanel" style="margin-top:1rem">Answer</label>
           <p id="activeQuery" class="query-label hidden"></p>
-          <div id="answer" class="answer"></div>
-        </article>
-        <article class="panel">
-          <h2>Citations & risk</h2>
+          <div id="answer" class="answer panel" style="margin-top:0.35rem;padding:0.75rem;background:var(--vp-bg-subtle);border-radius:var(--vp-radius-sm);border:1px solid var(--vp-border)"></div>
+
+          <label style="margin-top:0.85rem">Citations &amp; risk</label>
           <ul id="citations"></ul>
           <div id="riskFlags" class="flags"></div>
-        </article>
-      </section>
-
-      <section class="panel hidden" id="compareResults">
-        <h2>Strategy comparison</h2>
-        <p id="compareStatus" class="muted"></p>
-        <p id="compareQuery" class="query-label"></p>
-        <div id="strategyCards" class="strategy-grid"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Trace</h2>
-        <pre id="trace" class="trace"></pre>
-      </section>
-
-      <details class="panel" style="padding:1rem 1.25rem">
-        <summary style="cursor:pointer;font-weight:600">Advanced — ingest document</summary>
-        <p class="muted">Upload a PDF or plain-text file, or load the bundled sample. Text is sent to <code>/v1/ingest</code> (in-memory on Render — re-ingest after cold starts).</p>
-        <label for="docTitle">Document title</label>
-        <input id="docTitle" type="text" placeholder="e.g. Q3 security policy" />
-        <label for="docFile">PDF or .txt file</label>
-        <input id="docFile" type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" />
-        <div class="row row-actions">
-          <button id="ingest" type="button">Ingest document</button>
-          <button id="loadSample" type="button" class="ghost">Load sample document</button>
-        </div>
-        <span id="ingestStatus" class="muted ingest-status"></span>
-        <label for="apiKey" style="margin-top:0.75rem">API key (only if the backend requires one)</label>
-        <input id="apiKey" type="password" placeholder="X-API-Key" />
-      </details>
+        </aside>
       </div>
-    </main>
-    <footer class="app-footer">Enterprise RAG Platform · <a href="https://github.com/vpeetla-ai/enterprise_rag_platform">vpeetla-ai</a></footer>
+
+      <div class="gb-secondary">
+        <details>
+          <summary>Eval tools — retrieve only · compare all 3 strategies</summary>
+          <div class="panel" style="margin-top:0.65rem">
+            <div class="row row-actions">
+              <button id="retrieve" type="button" class="ghost">Retrieve only</button>
+              <button id="testAll" type="button" class="ghost">Test all 3 strategies</button>
+            </div>
+          </div>
+        </details>
+
+        <section class="grid hidden" id="singleResult" aria-hidden="true"></section>
+
+        <section class="panel hidden" id="compareResults">
+          <h2>Strategy comparison</h2>
+          <p id="compareStatus" class="muted"></p>
+          <p id="compareQuery" class="query-label"></p>
+          <div id="strategyCards" class="strategy-grid"></div>
+        </section>
+
+        <details>
+          <summary>Advanced — ingest document · API key</summary>
+          <div class="panel" style="margin-top:0.65rem">
+            <p class="muted">Upload a PDF or plain-text file. Corpus resets on Render cold start — re-ingest if needed.</p>
+            <label for="docTitle">Document title</label>
+            <input id="docTitle" type="text" placeholder="e.g. Q3 security policy" />
+            <label for="docFile">PDF or .txt file</label>
+            <input id="docFile" type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" />
+            <div class="row row-actions">
+              <button id="ingest" type="button">Ingest document</button>
+              <button id="loadSample" type="button" class="ghost">Load sample document</button>
+            </div>
+            <span id="ingestStatus" class="muted ingest-status"></span>
+            <label for="apiKey" style="margin-top:0.75rem">API key (if backend requires one)</label>
+            <input id="apiKey" type="password" placeholder="X-API-Key" />
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <footer class="app-footer">Enterprise RAG Platform · glass-box UX · <a href="https://github.com/vpeetla-ai/enterprise_rag_platform">vpeetla-ai</a></footer>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="config.js"></script>
     <script src="architect-config.js"></script>
-    <script src="architect-panel.js"></script>
+    <script src="glassbox.js"></script>
     <script>document.getElementById("apiUrl").textContent = window.ENTERPRISE_RAG_API || "/api";</script>
     <script src="app.js"></script>
   </body>

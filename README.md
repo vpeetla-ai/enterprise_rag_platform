@@ -222,6 +222,15 @@ API surface:
 | `POST /v1/ingest` | Add documents to the in-memory corpus |
 | `POST /v1/answer` | Grounded answer with citations, risk flags, and trace |
 
+## Principal review path — Demo vs Strict
+
+| Mode | When | Principal trust | UI signal |
+|------|------|-----------------|-----------|
+| **Demo** (default live) | Portfolio / glass-box UX | Client-asserted body fields | Amber sticky banner · `GET /health` → `review_mode=demo` |
+| **Strict** (recommended for panels) | `PRODUCTION_STRICT=1` + `RAG_JWT_SECRET` | JWT Bearer claims only (anti-spoof) | Green banner · `principal_source=jwt` |
+
+Strict docs: [ADR-0006](docs/adr/0006-verified-principal-jwt-strict.md) · org [ADR-024](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/adr/ADR-024-production-strict-fail-closed.md).
+
 ## Production Hardening Checklist
 
 - **JWT-verified `Principal` under `PRODUCTION_STRICT=1`** — shipped (see

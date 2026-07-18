@@ -208,9 +208,17 @@ if FastAPI is not None:
     state = AppState()
 
     @app.get("/health")
-    def health() -> dict[str, str]:
+    def health() -> dict[str, Any]:
         backend = "qdrant" if os.getenv("QDRANT_BACKEND", "").strip().lower() in {"1", "true", "yes", "on"} else "memory"
-        return {"status": "ok", "service": "enterprise-rag-platform", "retriever_backend": backend}
+        strict = production_strict()
+        return {
+            "status": "ok",
+            "service": "enterprise-rag-platform",
+            "retriever_backend": backend,
+            "production_strict": strict,
+            "principal_source": "jwt" if strict else "request_body",
+            "review_mode": "strict" if strict else "demo",
+        }
 
     @app.get("/v1/ops/metrics")
     def ops_metrics() -> dict[str, Any]:

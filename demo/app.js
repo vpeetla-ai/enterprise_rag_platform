@@ -129,11 +129,40 @@ function replayGlassBox(data, source) {
   }
 }
 
+function applyReviewMode(health) {
+  const strict = Boolean(health?.production_strict) || health?.review_mode === "strict";
+  const badge = document.getElementById("modeBadge");
+  const banner = document.getElementById("reviewModeBanner");
+  if (badge) {
+    badge.textContent = strict ? "Strict mode" : "Demo mode";
+    badge.classList.toggle("status-badge--warn", !strict);
+    badge.classList.toggle("status-badge--strict", strict);
+  }
+  if (banner) {
+    banner.classList.toggle("review-mode-banner--demo", !strict);
+    banner.classList.toggle("review-mode-banner--strict", strict);
+    if (strict) {
+      banner.innerHTML =
+        "<strong>Strict review mode</strong><span>JWT-verified Principal is active (<code>PRODUCTION_STRICT</code>). Body identity fields are ignored for access decisions — Principal panel path.</span>";
+    } else {
+      banner.innerHTML =
+        '<strong>Demo review mode</strong><span>Live demo defaults to client-asserted Principal (body fields). For Principal panels, prefer <strong>Strict</strong> — JWT-verified Principal under <code>PRODUCTION_STRICT=1</code> (<a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/adr/0006-verified-principal-jwt-strict.md" target="_blank" rel="noreferrer">ADR-0006</a>).</span>';
+    }
+  }
+}
+
 async function wakeApi(maxAttempts = 4) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const res = await fetch(`${API}/health`, { signal: AbortSignal.timeout(45000), cache: "no-store" });
-      if (res.ok) return true;
+      if (res.ok) {
+        try {
+          applyReviewMode(await res.json());
+        } catch {
+          /* keep default Demo banner */
+        }
+        return true;
+      }
     } catch {
       /* Render cold start */
     }

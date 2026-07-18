@@ -18,9 +18,17 @@
           </div>
         </a>
         <div class="header-actions">
-          <span class="status-badge">Live API</span>
+          <span id="modeBadge" class="status-badge status-badge--warn">Demo mode</span>
           <a href="https://github.com/vpeetla-ai/enterprise_rag_platform" class="btn-ghost" style="padding:0.4rem 0.75rem;font-size:0.8rem;text-decoration:none">GitHub</a>
         </div>
+      </div>
+      <div id="reviewModeBanner" class="review-mode-banner review-mode-banner--demo" role="status">
+        <strong>Demo review mode</strong>
+        <span>
+          Live demo defaults to client-asserted Principal (body fields). For Principal panels, prefer
+          <strong>Strict</strong> — JWT-verified Principal under <code>PRODUCTION_STRICT=1</code>
+          (<a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/adr/0006-verified-principal-jwt-strict.md" target="_blank" rel="noreferrer">ADR-0006</a>).
+        </span>
       </div>
     </header>
 
@@ -28,7 +36,7 @@
       <div class="gb-hero page-hero">
         <p class="eyebrow">Access-before-ranking · glass-box</p>
         <h1>Watch retrieval governance, not just answers</h1>
-        <p class="lede">Architecture and live metrics stay visible while you run governed Q&amp;A. Center pipeline replays trace spans from <code>/v1/answer</code> (replay, not SSE).</p>
+        <p class="lede">Architecture and live metrics stay visible while you run governed Q&amp;A. Center pipeline replays trace spans from <code>/v1/answer</code> (replay, not SSE). Banner above shows Demo vs Strict from <code>/health</code>.</p>
       </div>
 
       <div class="gb-workbench">

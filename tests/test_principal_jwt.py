@@ -26,6 +26,23 @@ def test_demo_mode_still_accepts_body_principal(monkeypatch):
     assert resp.json().get("principal_source") == "request_body"
 
 
+def test_health_exposes_review_mode(monkeypatch):
+    monkeypatch.delenv("PRODUCTION_STRICT", raising=False)
+    health = client.get("/health")
+    assert health.status_code == 200
+    body = health.json()
+    assert body["review_mode"] == "demo"
+    assert body["principal_source"] == "request_body"
+    assert body["production_strict"] is False
+
+    monkeypatch.setenv("PRODUCTION_STRICT", "true")
+    monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
+    strict = client.get("/health").json()
+    assert strict["review_mode"] == "strict"
+    assert strict["principal_source"] == "jwt"
+    assert strict["production_strict"] is True
+
+
 def test_strict_requires_bearer(monkeypatch):
     monkeypatch.setenv("PRODUCTION_STRICT", "true")
     monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")

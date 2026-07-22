@@ -1,5 +1,7 @@
 # S3.1 (Top-1% plan D2): starter = always-on for Principal panels (no free-tier spin-down).
 # Live hostname may remain enterprise-rag-api-4el1.onrender.com after rename — update demo proxies if needed.
+#
+# P1 (90/100 plan): dual Demo + Strict services — PRODUCTION_STRICT is process env, so two services.
 services:
   - type: web
     name: enterprise-rag-api
@@ -26,3 +28,33 @@ services:
         value: https://cloud.langfuse.com
       - key: LANGFUSE_ENABLED
         value: "true"
+      - key: PRODUCTION_STRICT
+        value: "false"
+      - key: RAG_API_KEY
+        sync: false
+
+  - type: web
+    name: enterprise-rag-api-strict
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: AEGISAI_GATEWAY_ENABLED
+        value: "false"
+      - key: QDRANT_BACKEND
+        value: "false"
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: PRODUCTION_STRICT
+        value: "true"
+      - key: RAG_JWT_SECRET
+        sync: false
+      - key: RAG_API_KEY
+        sync: false
+      - key: LANGFUSE_ENABLED
+        value: "false"

@@ -45,6 +45,15 @@ curl -sS "$(cd deploy/gcp/cloudrun && terraform output -raw service_url)/health"
 2. `PRODUCTION_STRICT=true` + `RAG_JWT_SECRET`  
 3. `./scripts/setup_strict_render.sh` for secret mint + checklist  
 
+## Capture receipt (any Strict host)
+
+```bash
+export ERAG_STRICT_URL=http://127.0.0.1:8080   # or Cloud Run Strict URL
+export RAG_JWT_SECRET=…                        # same as Strict process
+./scripts/capture_strict_panel_receipt.sh
+# → docs/artifacts/strict-receipts/<utc>-strict-receipt.md
+```
+
 ## Two-minute spoof check (any Strict host)
 
 Without Bearer → 401/403. With Bearer → JWT principal wins; body `tenant_id=attacker` must not escalate clearance.

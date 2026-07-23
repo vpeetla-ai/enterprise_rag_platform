@@ -29,14 +29,21 @@ variable "image_tag" {
 }
 
 variable "production_strict" {
-  type    = bool
-  default = false
+  type        = bool
+  default     = false
+  description = "When true, set PRODUCTION_STRICT and require rag_jwt_secret"
 }
 
 variable "rag_jwt_secret" {
   type      = string
   default   = ""
   sensitive = true
+}
+
+variable "service_name" {
+  type        = string
+  default     = ""
+  description = "Cloud Run service name. Empty → enterprise-rag or enterprise-rag-strict from production_strict."
 }
 
 resource "google_project_service" "run" {
@@ -58,6 +65,9 @@ resource "google_artifact_registry_repository" "erag" {
 
 locals {
   image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.erag.repository_id}/enterprise-rag:${var.image_tag}"
+  service_name = var.service_name != "" ? var.service_name : (
+    var.production_strict ? "enterprise-rag-strict" : "enterprise-rag"
+  )
 }
 
 resource "google_service_account" "erag" {
@@ -66,7 +76,7 @@ resource "google_service_account" "erag" {
 }
 
 resource "google_cloud_run_v2_service" "erag" {
-  name     = "enterprise-rag"
+  name     = local.service_name
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 

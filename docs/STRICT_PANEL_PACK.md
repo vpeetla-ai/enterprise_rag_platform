@@ -1,35 +1,26 @@
 # Strict ERAG panel pack (P1 — 90/100 plan)
 
-**Demo API (body Principal):** `https://enterprise-rag-api-4el1.onrender.com`  
-**Strict API (JWT Principal):** `https://enterprise-rag-api-strict.onrender.com` *(create via Blueprint sync / dashboard)*  
+**Demo API (body Principal):** `https://enterprise-rag-api-4el1.onrender.com` *(Render Free — expect cold starts)*  
+**Strict API (preferred interim):** local Docker **or** GCP Cloud Run Strict  
+**Strict API (later):** `https://enterprise-rag-api-strict.onrender.com` *(Render Starter when owner upgrades)*  
 **ADR:** [0006-verified-principal-jwt-strict.md](./adr/0006-verified-principal-jwt-strict.md)
 
-## Why dual URL
+## Why dual process
 
-`PRODUCTION_STRICT` is process environment. One service cannot be Demo and Strict at once without unsafe per-request mode switches. Dual Starter services keep Demo warm for strangers and Strict warm for panels (~+$7/mo).
+`PRODUCTION_STRICT` is process environment. One process cannot be Demo and Strict safely.
 
-## Dashboard apply
-
-1. Sync Blueprint from this repo `render.yaml` **or** create web service `enterprise-rag-api-strict` from the same Dockerfile.
-2. Plan: **Starter**.
-3. Env: `PRODUCTION_STRICT=true`, `RAG_JWT_SECRET=<strong random>`, optional `RAG_API_KEY`.
-4. Confirm: `curl -sS https://enterprise-rag-api-strict.onrender.com/health` → `"review_mode":"strict"`.
-
-## Two-minute panel recipe
+## Option A — Local Strict (no cloud bill) ← use while Render stays Free
 
 ```bash
-export RAG_JWT_SECRET='…'   # same as Render
-export RAG_API_KEY='…'      # if gate enabled
+cd enterprise_rag_platform
+./scripts/run_strict_local.sh
+# other terminal:
+export RAG_JWT_SECRET='…'   # printed by the script
 TOKEN=$(python3 scripts/mint_panel_jwt.py)
-
-# Health
-curl -sS https://enterprise-rag-api-strict.onrender.com/health | python3 -m json.tool
-
-# Body spoof must NOT win — JWT principal wins
-curl -sS -X POST https://enterprise-rag-api-strict.onrender.com/v1/answer \
+curl -sS http://127.0.0.1:8080/health | python3 -m json.tool   # review_mode=strict
+curl -sS -X POST http://127.0.0.1:8080/v1/answer \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $RAG_API_KEY" \
   -d '{
     "query":"What is the mandatory API key rotation period at Zephyr Corporation?",
     "tenant_id":"attacker","user_id":"attacker","groups":["executives"],
@@ -37,9 +28,28 @@ curl -sS -X POST https://enterprise-rag-api-strict.onrender.com/v1/answer \
   }'
 ```
 
-Without Bearer under Strict → 401/403. With Bearer → answer uses JWT clearance/groups, not body spoof.
+## Option B — GCP Cloud Run Strict (~$0 idle)
+
+Creates service **`enterprise-rag-strict`** (does not overwrite Demo `enterprise-rag`).
+
+```bash
+./scripts/deploy_strict_gcp.sh <PROJECT_ID>
+# or see deploy/gcp/cloudrun/README.md for terraform-only steps
+curl -sS "$(cd deploy/gcp/cloudrun && terraform output -raw service_url)/health" | python3 -m json.tool
+# expect review_mode=strict
+```
+
+## Option C — Render Strict twin (after Starter upgrade)
+
+1. Sync Blueprint / create `enterprise-rag-api-strict` · plan **Starter**  
+2. `PRODUCTION_STRICT=true` + `RAG_JWT_SECRET`  
+3. `./scripts/setup_strict_render.sh` for secret mint + checklist  
+
+## Two-minute spoof check (any Strict host)
+
+Without Bearer → 401/403. With Bearer → JWT principal wins; body `tenant_id=attacker` must not escalate clearance.
 
 ## Portfolio links
 
-- Technical review step 3 → Demo UI + this pack / Strict health
-- Spine health notes prefer Strict for panels
+- Technical review → Demo UI + this pack  
+- Spine health — Render Free cold starts labeled until Starter

@@ -25,9 +25,11 @@ class ContextAssembler:
             citation_id = f"S{index}"
             seen_text.add(compressed)
             token_estimate += next_tokens
+            page = hit.chunk.page_start
+            page_note = f"; Page: {page}" if page is not None else ""
             sections.append(
                 f"[{citation_id}] {hit.chunk.source_title}\n"
-                f"Owner: {hit.chunk.owner}; Updated: {hit.chunk.updated_at.date().isoformat()}\n"
+                f"Owner: {hit.chunk.owner}; Updated: {hit.chunk.updated_at.date().isoformat()}{page_note}\n"
                 f"{compressed}"
             )
             citations.append(
@@ -38,6 +40,9 @@ class ContextAssembler:
                     uri=hit.chunk.source_uri,
                     owner=hit.chunk.owner,
                     updated_at=hit.chunk.updated_at,
+                    page=page,
+                    chunk_id=hit.chunk.chunk_id,
+                    snippet=compressed,
                 )
             )
 

@@ -32,6 +32,14 @@ services:
         value: "false"
       - key: RAG_API_KEY
         sync: false
+      - key: EMBEDDING_PROVIDER
+        value: "hash"
+      - key: RAG_RERANKER
+        value: "score_boost"
+      - key: GENERATOR
+        value: "extractive"
+      - key: MOCK_LLM
+        value: "true"
 
   - type: web
     name: enterprise-rag-api-strict
@@ -58,3 +66,11 @@ services:
         sync: false
       - key: LANGFUSE_ENABLED
         value: "false"
+      - key: EMBEDDING_PROVIDER
+        value: "hash"
+      - key: RAG_RERANKER
+        value: "cross_encoder"
+      - key: GENERATOR
+        value: "extractive"
+      - key: CORS_ORIGINS
+        value: "https://enterprise-rag-platform-eta.vercel.app,http://localhost:3000"

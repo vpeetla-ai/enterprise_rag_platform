@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 from typing import Any
 
 from enterprise_rag.core.models import Classification, Principal
@@ -57,7 +58,25 @@ def verify_hs256_token(token: str, *, secret: str) -> dict[str, Any]:
     header = json.loads(_b64url_decode(header_b64))
     if header.get("alg") != "HS256":
         raise ValueError("unsupported_jwt_alg")
-    return json.loads(_b64url_decode(payload_b64))
+    claims = json.loads(_b64url_decode(payload_b64))
+    # ADR-0009: require exp and reject expired tokens
+    if "exp" not in claims:
+        raise ValueError("jwt_missing_exp")
+    try:
+        exp = int(claims["exp"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("jwt_invalid_exp") from exc
+    now = int(time.time())
+    if exp < now:
+        raise ValueError("jwt_expired")
+    if "iat" in claims:
+        try:
+            iat = int(claims["iat"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("jwt_invalid_iat") from exc
+        if iat > now + 60:
+            raise ValueError("jwt_iat_in_future")
+    return claims
 
 
 def _clearance_from_claim(value: Any) -> Classification:

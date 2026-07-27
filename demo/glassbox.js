@@ -43,15 +43,18 @@
       "[demo_fallback] The mandatory rotation period for API keys is 90 days. [S1]",
     grounded: true,
     declined: false,
-    risk_flags: [],
+    risk_flags: ["demo_fallback"],
     citations: [
       {
         title: "Zephyr Cloud Security Policy",
         uri: "upload://zephyr-policy.txt",
+        page: 2,
       },
     ],
     trace: DEMO_TRACE,
   };
+  // DEMO_ANSWER must NEVER be used on a successful live /v1/answer path.
+  // app.js may use it only when the API is unreachable / unauthorized.
 
   const NODE_STATES = ["gb-active", "gb-done", "gb-fallback", "gb-error"];
 

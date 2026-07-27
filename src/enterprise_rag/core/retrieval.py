@@ -88,10 +88,29 @@ class InMemoryHybridRetriever:
     def upsert(self, chunks: tuple[Chunk, ...]) -> int:
         if not chunks:
             return 0
-        self._chunks = self._chunks + chunks
-        texts = [c.text for c in chunks]
+        # Replace existing chunks for the same tenant+document (ingest lifecycle)
+        by_doc: dict[tuple[str, str], list[Chunk]] = {}
+        for chunk in chunks:
+            by_doc.setdefault((chunk.tenant_id, chunk.document_id), []).append(chunk)
+        for tenant_id, document_id in by_doc:
+            self.delete_document(document_id=document_id, tenant_id=tenant_id)
+
+        # Dedupe identical content_hash within this batch
+        seen_hash: set[str] = set()
+        unique: list[Chunk] = []
+        for chunk in chunks:
+            if chunk.content_hash and chunk.content_hash in seen_hash:
+                continue
+            if chunk.content_hash:
+                seen_hash.add(chunk.content_hash)
+            unique.append(chunk)
+        if not unique:
+            return 0
+
+        self._chunks = self._chunks + tuple(unique)
+        texts = [c.text for c in unique]
         vectors = self._embedder.embed(texts)
-        for chunk, vec in zip(chunks, vectors, strict=True):
+        for chunk, vec in zip(unique, vectors, strict=True):
             self._vectors[chunk.chunk_id] = vec
         self._doc_freq = self._build_doc_freq(self._chunks)
         lengths = [
@@ -99,7 +118,26 @@ class InMemoryHybridRetriever:
             for c in self._chunks
         ]
         self._avg_len = (sum(lengths) / len(lengths)) if lengths else 1.0
-        return len(chunks)
+        return len(unique)
+
+    def delete_document(self, *, document_id: str, tenant_id: str) -> int:
+        """Remove all chunks for a document in a tenant. Returns count removed."""
+        keep: list[Chunk] = []
+        removed = 0
+        for chunk in self._chunks:
+            if chunk.document_id == document_id and chunk.tenant_id == tenant_id:
+                self._vectors.pop(chunk.chunk_id, None)
+                removed += 1
+            else:
+                keep.append(chunk)
+        if removed:
+            self._chunks = tuple(keep)
+            self._doc_freq = self._build_doc_freq(self._chunks)
+            lengths = [
+                len(tokenize(f"{c.source_title} {c.text}")) for c in self._chunks
+            ]
+            self._avg_len = (sum(lengths) / len(lengths)) if lengths else 1.0
+        return removed
 
     def search(self, query: RetrievalQuery) -> tuple[RetrievalHit, ...]:
         terms = query_terms(query.query)

@@ -38,6 +38,8 @@ def main() -> int:
         "tenant_id": os.environ.get("PANEL_TENANT", "acme"),
         "groups": ["engineering", "ai-platform"],
         "clearance": os.environ.get("PANEL_CLEARANCE", "internal"),
+        "aud": os.environ.get("RAG_JWT_AUD", "enterprise-rag"),
+        "iss": os.environ.get("RAG_JWT_ISS", "vpeetla-panel"),
         "iat": now,
         "exp": now + int(os.environ.get("PANEL_TTL_SEC", "900")),
     }

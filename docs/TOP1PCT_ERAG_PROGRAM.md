@@ -1,9 +1,8 @@
 # Top-1% Enterprise RAG program
 
-**Status:** ACTIVE  
+**Status:** ACTIVE — hardening toward ≥8.5  
 **Repo:** enterprise_rag_platform  
-**Plan:** Cursor plan `top1pct_enterprise_rag` (C+C: PDF flagship first, dual Demo/Strict posture)  
-**Baseline:** Principal review PDF Q&A ~2/10 · overall ~3/10  
+**Plan:** Cursor plan `top1pct_enterprise_rag` + ROI moves 1–7 from hostile re-review  
 
 ## Locked choices
 
@@ -11,58 +10,34 @@
 |----------|--------|
 | North star | Phases 1–3 PDF Q&A undeniable; 4–5 control plane |
 | Budget | Demo cheap; Strict/prod may use paid Qdrant + embeddings |
+| Product PDF bar | **Text-layer PDFs** (OCR optional / not default image) |
 
 ## Phase checklist
 
-### Phase 0 — Honesty reset
+### Phase 0–5 (core)
 
-- [x] README status table honest (Partial / Not shipped where true)
-- [x] This tracker
-- [x] [ADR-0007](./adr/0007-page-aware-ingest-and-citations.md)
-- [x] [ADR-0008](./adr/0008-dual-demo-strict-retrieval-profiles.md)
-- [x] Glass-box: demo_fallback only when API unreachable
+- [x] Page-aware PDF ingest + citations + UI jump
+- [x] BM25 + dense RRF (memory + Qdrant); CE warmup; paraphrase eval CI
+- [x] LLM generator path + citation-span faithfulness + no cite spoof
+- [x] Strict JWT/`exp` + ingest bind; rate limit; CORS; audit/p95
+- [x] Panel pack + COST/PROFILES; OCR optional flag
 
-### Phase 1 — Page provenance + PDF ingest
+### ROI moves → ≥8.5 (2026-07-27)
 
-- [x] Chunk/Citation page fields
-- [x] Page-aware chunker + `/v1/ingest/pdf`
-- [x] Golden page citation tests + HTTP PDF ingest tests
-- [x] Demo UI page jump + truncation honesty on flat upload
-
-### Phase 2 — Real hybrid + shipped rerank
-
-- [x] Embeddings port + RRF fusion + BM25 k1/b
-- [x] Qdrant real vectors + **BM25+RRF** hybrid (legacy scroll opt-in only)
-- [x] Cross-encoder in Docker; startup warmup (`RAG_RERANKER_WARMUP`)
-- [x] `/health` reports retrieval profile
-- [x] Paraphrase recall eval (CI)
-
-### Phase 3 — Grounded LLM + faithfulness
-
-- [x] `LlmGroundedGenerator` + extractive for MOCK/CI
-- [x] Remove citation spoof fallback
-- [x] Faithfulness gate + glass-box `rag.faithfulness` span
-- [x] Eval metrics gated in CI: page accuracy + faithfulness
-
-### Phase 4 — Control plane
-
-- [x] Strict ingest auth + JWT `exp`
-- [x] Per-request recorder; audit JSONL; p95 metrics
-- [x] CORS profile for Strict
-- [x] Rate limit ingest/answer (`RAG_RATE_LIMIT_*`)
-- [ ] Live Strict + Qdrant Cloud as corpus of record (owner: set `QDRANT_URL`)
-
-### Phase 5 — Polish
-
-- [x] OCR flag path (`RAG_OCR_ENABLED` → PyMuPDF OCR; else `ocr_required`)
-- [x] Layout-aware page sections (heading/paragraph splits, still page-bounded)
-- [x] Panel pack + PDF Q&A script
-- [x] Profiles + [COST.md](COST.md)
-- [ ] Hostile re-score ≥8.5 (owner / dual-model)
+- [x] **1. Qdrant as corpus of record** — `docker-compose.strict.yml` + `RAG_SEED_DEMO_CORPUS=false` when Qdrant; `scripts/verify_qdrant_persistence.sh`
+- [x] **2. Public profile honesty** — Demo banner shows live `/health` embed/rerank/generator/corpus; `product_bar.claim_aligned`
+- [x] **3. HITL hard-gate** — Strict / `HITL_HARD_GATE` withholds answer (`pending_approval`)
+- [x] **4. Citation-span faithfulness** — replaces bag-of-words novel-token rule
+- [x] **5. Prod auth baseline** — Strict requires `RAG_API_KEY` + JWT; optional `aud`/`iss`; metrics gated
+- [x] **6. Ingest lifecycle** — replace-by-document_id, `DELETE /v1/documents/{id}`, content_hash dedupe
+- [x] **7. OCR product decision** — text-layer is the bar; OCR remains opt-in flag only
+- [ ] **Owner:** Wire live Strict to Qdrant Cloud URL + keys so `claim_aligned=true` on a public host
+- [ ] Hostile re-score ≥8.5 (after live Strict SoR)
 
 ## Progress log
 
 | Date | Note |
 |------|------|
 | 2026-07-26 | Program started; Phases 0–5 core shipped |
-| 2026-07-27 | Gap close vs plan: Qdrant hybrid RRF, eval CI gates, rate limit, OCR flag, CE warmup, paraphrase eval, honesty fixes |
+| 2026-07-27 | Gap close vs plan (PR #10): Qdrant hybrid RRF, eval CI gates, rate limit, OCR flag, CE warmup |
+| 2026-07-27 | ROI moves 1–7 implemented (Qdrant compose, HITL gate, span faithfulness, auth, lifecycle) |

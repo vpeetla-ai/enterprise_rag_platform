@@ -1,0 +1,40 @@
+# Strict local stack: Qdrant as corpus of record + ERAG API
+# Usage:
+#   docker compose -f docker-compose.strict.yml up --build
+#   export RAG_JWT_SECRET=… RAG_API_KEY=…
+#   python3 scripts/mint_panel_jwt.py
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    ports:
+      - "6333:6333"
+    volumes:
+      - erag_qdrant_data:/qdrant/storage
+
+  erag:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PRODUCTION_STRICT: "true"
+      RAG_JWT_SECRET: ${RAG_JWT_SECRET:-dev-strict-secret-change-me}
+      RAG_API_KEY: ${RAG_API_KEY:-dev-api-key-change-me}
+      RAG_JWT_AUD: ${RAG_JWT_AUD:-enterprise-rag}
+      RAG_JWT_ISS: ${RAG_JWT_ISS:-vpeetla-panel}
+      QDRANT_BACKEND: "true"
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: enterprise_rag
+      RAG_SEED_DEMO_CORPUS: "false"
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+      RAG_RERANKER: ${RAG_RERANKER:-cross_encoder}
+      GENERATOR: ${GENERATOR:-llm}
+      MOCK_LLM: ${MOCK_LLM:-true}
+      HITL_HARD_GATE: "true"
+      CORS_ORIGINS: "https://enterprise-rag-platform-eta.vercel.app,http://localhost:3000"
+    depends_on:
+      - qdrant
+
+volumes:
+  erag_qdrant_data:

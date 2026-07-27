@@ -12,7 +12,7 @@
 | Evaluation blind spots hide regressions | High | High | Golden datasets, online feedback sampling, retrieval and generation regression gates | Quality Engineering |
 | Vendor lock-in limits future migration | Medium | Medium | Ports/adapters for LLM, vector store, reranker, graph, telemetry | Architecture |
 | Real-time ingestion overloads indexes | Medium | Medium | Queue-based ingestion, backpressure, batch compaction, blue-green indexes | Data Platform |
-| Principal identity is client-asserted, not verified — full access-control bypass | Low when `PRODUCTION_STRICT=true` + `RAG_JWT_SECRET`; High in demo mode | Critical | **Mitigated under strict profile (ADR-0006):** `/v1/retrieve` and `/v1/answer` derive `Principal` from HS256 JWT claims and ignore body spoof fields. Demo mode (default) remains client-asserted by design — see [ADR-0004](adr/0004-api-auth-and-principal-trust.md). Ingest ACL metadata still uses body tenant/groups (writer trust separate). | Security Architecture |
+| Principal identity is client-asserted, not verified — full access-control bypass | Low when `PRODUCTION_STRICT=true` + `RAG_JWT_SECRET`; High in demo mode | Critical | **Mitigated under strict profile (ADR-0006/0009):** `/v1/retrieve`, `/v1/answer`, `/v1/ingest`, and `/v1/ingest/pdf` derive `Principal` from HS256 JWT (`exp` required) and bind ingest tenant/groups from claims. Demo mode (default) remains client-asserted by design — see [ADR-0004](adr/0004-api-auth-and-principal-trust.md). | Security Architecture |
 
 ## Residual Risk
 

@@ -16,6 +16,7 @@
     "rag.assemble": "assemble",
     "rag.generate": "generate",
     "rag.guardrails.output": "guard-out",
+    "rag.faithfulness": "guard-out",
     "rag.decline": "decline",
   };
 

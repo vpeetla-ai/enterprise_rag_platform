@@ -18,13 +18,45 @@ git clone https://github.com/vpeetla-ai/vpeetla-ai-skills.git
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://enterprise-rag-platform-eta.vercel.app)
 
-[▶ Live demo](https://enterprise-rag-platform-eta.vercel.app) · [🚀 Deploy guide](docs/LIVE_DEMO.md) · [Architecture hub](docs/ARCHITECTURE.md) · [Ecosystem map](docs/ECOSYSTEM.md)
+[▶ Live demo](https://enterprise-rag-platform-eta.vercel.app) · [🚀 Deploy guide](docs/LIVE_DEMO.md) · [Architecture hub](docs/ARCHITECTURE.md) · [Ecosystem map](docs/ECOSYSTEM.md) · [Top-1% program](docs/TOP1PCT_ERAG_PROGRAM.md) · [Profiles](docs/PROFILES.md) · [Cost](docs/COST.md) · [Panel pack](docs/STRICT_PANEL_PACK.md)
 
 > **First-run note:** The Render API sleeps after inactivity on the free tier — the first request takes ~50s to wake, and the seeded corpus re-ingests on cold start. If a query returns empty, wait and retry once.
+
+**Product bar (top-1% PDF Q&A):** hybrid BM25 + dense with **RRF**, optional cross-encoder rerank, **page-specific citations** from server PDF ingest, grounded answers with **decline** + faithfulness checks, and Demo vs Strict principal trust (ADR-0006/0009).
 
 Production RAG is a governed intelligence system, not a vector database wrapper. This project is a reference implementation and architecture package for an enterprise retrieval-augmented generation platform with access-aware retrieval, context engineering, evaluation, guardrails, observability, and operational decision records.
 
 **Portfolio:** [Case study](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/case-studies/enterprise-rag-platform.md) · [Architecture](docs/ARCHITECTURE.md) · [Ecosystem](docs/ECOSYSTEM.md) · [Deploy](docs/LIVE_DEMO.md)
+
+## Quick start — PDF Q&A with page citations
+
+```bash
+pip install -e ".[dev,pdf]"
+uvicorn enterprise_rag.api.app:app --reload --port 8080
+
+# Upload a text-layer PDF (multipart — requires python-multipart)
+curl -sS -X POST http://127.0.0.1:8080/v1/ingest/pdf \
+  -F file=@policy.pdf -F document_id=doc-1 -F title="Policy" \
+  -F tenant_id=acme -F owner=demo -F groups=engineering
+
+# Ask — citations include page
+curl -sS -X POST http://127.0.0.1:8080/v1/answer \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"What is the mandatory API key rotation period?","tenant_id":"acme","user_id":"u1","groups":["engineering"],"mode":"hybrid","rerank":true}'
+```
+
+Glass-box UI: open the [live demo](https://enterprise-rag-platform-eta.vercel.app), upload under Advanced, click a citation `p.N` to jump the PDF viewer.
+
+## Interview playbook (Principal / Staff+)
+
+| Playbook entry | What it drills | Live proof |
+|----------------|----------------|------------|
+| [02 — RAG platform at scale](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/02-rag-platform-at-scale/) | Access-before-ranking, hybrid, grounding | This repo + ADR-002 |
+| [22 — Enterprise PDF Q&A citations & grounding](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/22-enterprise-pdf-qa-citations-and-grounding/) | Page cites, decline, faithfulness, Demo/Strict | `/v1/ingest/pdf` · ADR-0007 |
+| [23 — Hybrid retrieval & access-aware ranking](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/23-enterprise-hybrid-retrieval-and-access-aware-ranking/) | BM25+dense RRF, CE rerank, ACL before score | ADR-0001/0008 |
+| [17 — Prompt injection / app sec](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/17-llm-application-security-prompt-injection/) | Jailbreak decline path | Guardrails + adversarial GER suite |
+
+Study UI: [ai-architect-interview-playbook.vercel.app](https://ai-architect-interview-playbook.vercel.app) · [REPO_INTERVIEW_MAP](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/docs/REPO_INTERVIEW_MAP.md)
 
 ## Architecture Principles
 
@@ -51,8 +83,9 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 | HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/strategies` |
 | Ingestion data contract + lineage | **Implemented** | 422 blocking issues; `content_hash` + page bounds |
 | Golden eval / GER CI gate | **Implemented** | Shared registry + local page citation tests |
-| Vector store adapter (Qdrant) | **Implemented** | Real vectors + filtered search (legacy scroll opt-in only) |
-| OCR for scanned PDFs | **Not shipped** | Returns `ocr_required` until Phase-5 flag path |
+| Vector store adapter (Qdrant) | **Implemented** | Real vectors + BM25+RRF hybrid (legacy scroll opt-in only) |
+| OCR for scanned PDFs | **Partial** | `RAG_OCR_ENABLED` → PyMuPDF OCR; else `ocr_required` ([OCR.md](docs/OCR.md)) |
+| Rate limit | **Implemented** | `RAG_RATE_LIMIT_PER_MIN` on ingest/retrieve/answer |
 | AegisAI gateway bridge | **Implemented** | Ingest + high-risk answers |
 | Langfuse trace export | **Implemented** | When `LANGFUSE_*` set |
 | Knowledge graph expansion | **Implemented** | In-memory entity expander |
@@ -72,17 +105,17 @@ flowchart LR
   App --> Gateway["RAG API — FastAPI"]
   Gateway --> Policy["Access Policy<br/>BEFORE ranking"]
   Gateway --> Orchestrator["RagPipeline"]
-  Orchestrator --> Retrieval["Hybrid Retriever"]
-  Orchestrator --> Rerank["CrossEncoderReranker"]
+  Orchestrator --> Retrieval["Hybrid Retriever<br/>BM25 + dense + RRF"]
+  Orchestrator --> Rerank["Reranker<br/>CE or ScoreBoost"]
   Orchestrator --> Decline{"Score ≥ threshold?"}
   Decline -->|no| Refuse["Decline to answer"]
-  Decline -->|yes| Gen["Grounded answer + citations"]
-  Sources["Enterprise docs"] --> Ingestion["POST /v1/ingest"]
+  Decline -->|yes| Gen["Grounded answer + page citations"]
+  Sources["Enterprise docs / PDF"] --> Ingestion["POST /v1/ingest · /v1/ingest/pdf"]
   Ingestion --> Retrieval
   Gateway --> Obs["Pipeline spans → Langfuse"]
 ```
 
-*Solid boxes are implemented. LLM routers are extension points documented in ADRs.*
+*Solid boxes are implemented. LLM path via `GENERATOR=llm`; extractive default for CI / `MOCK_LLM`.*
 
 ## Runtime Request Flow
 
@@ -220,10 +253,15 @@ API surface:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /health` | Liveness |
-| `GET /v1/strategies` | Retrieval modes and reranker options |
-| `POST /v1/ingest` | Add documents to the in-memory corpus |
-| `POST /v1/answer` | Grounded answer with citations, risk flags, and trace |
+| `GET /health` | Liveness + `retrieval` profile + `review_mode` |
+| `GET /v1/strategies` | Retrieval modes, fusion, embedders, generators |
+| `GET /v1/ops/metrics` | Success rate + **p95_latency_ms** |
+| `POST /v1/ingest` | Text / optional `pages[]` ingest |
+| `POST /v1/ingest/pdf` | Multipart PDF → page-aware chunks (needs `python-multipart`) |
+| `POST /v1/retrieve` | Access-aware hybrid retrieve (+ optional rerank) |
+| `POST /v1/answer` | Grounded answer with citations (`page`), risk flags, trace |
+
+Install tip: `pip install -e ".[dev,pdf]"` (PDF) or `".[qdrant,rerank,pdf]"` for the full Strict image extras.
 
 ## Principal review path — Demo vs Strict
 

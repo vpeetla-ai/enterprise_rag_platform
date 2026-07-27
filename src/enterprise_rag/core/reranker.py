@@ -59,6 +59,10 @@ class CrossEncoderReranker:
             self._model = CrossEncoder(self.model_name)
         return self._model
 
+    def warmup(self) -> None:
+        """Load weights at process start (plan: no per-request construct / cold first hit)."""
+        self._load()
+
     def rerank(
         self, query: str, hits: tuple[RetrievalHit, ...], limit: int
     ) -> tuple[RetrievalHit, ...]:

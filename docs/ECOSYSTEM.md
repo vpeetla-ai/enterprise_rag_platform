@@ -19,9 +19,9 @@ flowchart TB
   end
 
   subgraph Knowledge["Knowledge — enterprise_rag_platform"]
-    ING["Governed ingestion"]
-    RET["Hybrid retriever port"]
-    CTX["Context + citations"]
+    ING["PDF + text ingest<br/>page-aware"]
+    RET["BM25 + dense + RRF"]
+    CTX["Page citations + decline"]
     GR["Guardrails"]
   end
 
@@ -61,15 +61,24 @@ flowchart TB
 
 | Area | Status |
 | --- | --- |
-| Access-before-ranking | Implemented (`AccessPolicy` + retriever filter) |
-| Hybrid in-memory retrieval | Implemented (`InMemoryHybridRetriever`) |
-| Reranker port + reference reranker | Implemented (`ScoreBoostReranker`) |
-| Pipeline telemetry spans | Implemented (`EventRecorder` wired in `RagPipeline`) |
+| Access-before-ranking | Implemented (`AccessPolicy` + retriever filter; Strict JWT) |
+| Hybrid retrieval (BM25 + dense + RRF) | Implemented (`InMemoryHybridRetriever` + Qdrant BM25+RRF) |
+| Page-aware PDF ingest | Implemented (`POST /v1/ingest/pdf`, `Citation.page`) |
+| Reranker port | Implemented — CE on Strict image; ScoreBoost for Demo |
+| Decline + faithfulness | Implemented — no citation spoof fallback |
+| Pipeline telemetry spans | Implemented (`EventRecorder` + audit JSONL + p95) |
+| Rate limit | Implemented (`RAG_RATE_LIMIT_*`) |
+| OCR | Partial — `RAG_OCR_ENABLED` flag path |
 | Langfuse export (`ops/langfuse_export.py`) | Implemented — set `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` |
-| Vector DB / graph adapters | Implemented behind ports (`QdrantHybridRetriever`, `InMemoryGraphExpander`) |
-| HTTP API (`/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies`) | Implemented |
-| Cross-encoder reranker | Planned — plug into `Reranker` protocol |
-| Online eval feedback loop | Partial — offline metrics in `eval/metrics.py` |
+| HTTP API | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/strategies`, `/v1/ops/metrics` |
+| Demo vs Strict profiles | Implemented — [PROFILES.md](PROFILES.md) · [COST.md](COST.md) · [TOP1PCT_ERAG_PROGRAM.md](TOP1PCT_ERAG_PROGRAM.md) |
+| Online eval feedback loop | Partial — offline metrics + GER CI + page/faithfulness gate |
+
+## Interview playbook
+
+- [02 RAG at scale](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/02-rag-platform-at-scale/)
+- [22 PDF Q&A citations](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/22-enterprise-pdf-qa-citations-and-grounding/)
+- [23 Hybrid RRF](https://ai-architect-interview-playbook.vercel.app/q/ai-system-design/23-enterprise-hybrid-retrieval-and-access-aware-ranking/)
 
 ## Related repositories
 
@@ -77,3 +86,4 @@ flowchart TB
 - [venkat-ai-platform](https://github.com/vpeetla-ai/venkat-ai-platform) — orchestration + RAG lab
 - [aegisloop-agentops-workbench](https://github.com/vpeetla-ai/aegisloop-agentops-workbench) — AgentOps missions
 - [ai-content-factory](https://github.com/vpeetla-ai/ai-content-factory) — content automation
+- [ai-architect-interview-playbook](https://github.com/vpeetla-ai/ai-architect-interview-playbook) — Staff+/Principal drills

@@ -146,6 +146,28 @@ def authorize_high_risk_answer(*, case_id: str, risk_flags: tuple[str, ...]) -> 
             case_id=case_id,
             reason="no_hitl_flag",
         )
+    # Local hard-gate when gateway is off but Strict / HITL_HARD_GATE demands control
+    hard_local = _bool_env("HITL_HARD_GATE", "false") or (
+        os.getenv("PRODUCTION_STRICT", "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    if not gateway_enabled():
+        if hard_local:
+            return GatewayDecision(
+                decision="approval_required",
+                allowed=False,
+                requires_approval=True,
+                blocked=False,
+                case_id=case_id,
+                reason="hitl_local_gate",
+            )
+        return GatewayDecision(
+            decision="allow",
+            allowed=True,
+            requires_approval=False,
+            blocked=False,
+            case_id=case_id,
+            reason="gateway_disabled",
+        )
     return request_gateway(
         tool_name="rag.high_risk_answer",
         action_type="deliver_answer",

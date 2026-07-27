@@ -80,8 +80,22 @@ class IngestRequest(BaseModel):  # type: ignore[misc]
     pages: list[dict[str, Any]] | None = None
 
 
+def _qdrant_backend() -> bool:
+    return os.getenv("QDRANT_BACKEND", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _seed_demo_corpus_enabled() -> bool:
+    raw = os.getenv("RAG_SEED_DEMO_CORPUS", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    # Default: seed memory Demo only; never treat reseed as corpus-of-record on Qdrant
+    return not _qdrant_backend()
+
+
 def _build_retriever() -> InMemoryHybridRetriever | Any:
-    if os.getenv("QDRANT_BACKEND", "").strip().lower() in {"1", "true", "yes", "on"}:
+    if _qdrant_backend():
         from enterprise_rag.adapters.qdrant_retriever import QdrantHybridRetriever, qdrant_available
 
         if qdrant_available():
@@ -125,7 +139,8 @@ class AppState:
                     warmup()
                 except Exception:  # noqa: BLE001 — boot should not die if CE weights missing
                     pass
-        self._seed_demo_corpus()
+        if _seed_demo_corpus_enabled():
+            self._seed_demo_corpus()
         self.graph_expander = InMemoryGraphExpander(tuple(self._all_chunks))
 
     def _tag_chunks(self, chunks: tuple) -> tuple:
@@ -136,6 +151,13 @@ class AppState:
             metadata["entities"] = ",".join(entities)
             tagged.append(replace(chunk, metadata=metadata))
         return tuple(tagged)
+
+    def _drop_local_document(self, *, document_id: str, tenant_id: str) -> None:
+        self._all_chunks = [
+            c
+            for c in self._all_chunks
+            if not (c.document_id == document_id and c.tenant_id == tenant_id)
+        ]
 
     def _seed_demo_corpus(self) -> None:
         documents = [
@@ -208,10 +230,23 @@ def _gateway_payload(decision: Any) -> dict[str, Any]:
 
 def _require_api_key(x_api_key: Annotated[str | None, Header()] = None) -> None:
     expected = os.getenv("RAG_API_KEY")
+    if production_strict() and not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="PRODUCTION_STRICT requires RAG_API_KEY (prod auth baseline)",
+        )
     if not expected:
         return
     if not x_api_key or not secrets.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+
+def _require_ops_auth(x_api_key: Annotated[str | None, Header()] = None) -> None:
+    """Protect metrics — require API key whenever configured, or always under Strict."""
+    expected = os.getenv("RAG_API_KEY", "").strip()
+    if production_strict() or expected:
+        _require_api_key(x_api_key)
+        return
 
 
 def _enforce_rate_limit(route: str, identity: str) -> None:
@@ -253,26 +288,38 @@ if FastAPI is not None:
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        backend = (
-            "qdrant"
-            if os.getenv("QDRANT_BACKEND", "").strip().lower() in {"1", "true", "yes", "on"}
-            else "memory"
-        )
+        backend = "qdrant" if _qdrant_backend() else "memory"
         strict = production_strict()
         profile = retrieval_profile()
+        generator = os.getenv("GENERATOR", "extractive")
+        claim_aligned = (
+            profile.get("embedding_provider") not in {None, "hash"}
+            and profile.get("reranker") == "cross_encoder"
+            and generator == "llm"
+            and backend == "qdrant"
+        )
         return {
             "status": "ok",
             "service": "enterprise-rag-platform",
             "retriever_backend": backend,
+            "corpus_of_record": backend,
+            "demo_seed_enabled": _seed_demo_corpus_enabled(),
             "production_strict": strict,
             "principal_source": "jwt" if strict else "request_body",
             "review_mode": "strict" if strict else "demo",
             "retrieval": profile,
-            "generator": os.getenv("GENERATOR", "extractive"),
+            "generator": generator,
             "page_citations": True,
+            "product_bar": {
+                "pdf": "text_layer_page_citations",
+                "ocr": "optional_flag_only",
+                "claim_aligned": bool(claim_aligned),
+            },
+            "hitl_hard_gate": strict
+            or os.getenv("HITL_HARD_GATE", "").strip().lower() in {"1", "true", "yes", "on"},
         }
 
-    @app.get("/v1/ops/metrics")
+    @app.get("/v1/ops/metrics", dependencies=[Depends(_require_ops_auth)])
     def ops_metrics() -> dict[str, Any]:
         total = state.query_count + state.answer_count
         finished = state.answer_count or 1
@@ -293,11 +340,8 @@ if FastAPI is not None:
                 "ingest_count": state.ingest_count,
                 "answer_count": state.answer_count,
                 "declined_count": state.declined_count,
-                "retriever_backend": (
-                    "qdrant"
-                    if os.getenv("QDRANT_BACKEND", "").strip().lower() in {"1", "true", "yes", "on"}
-                    else "memory"
-                ),
+                "retriever_backend": "qdrant" if _qdrant_backend() else "memory",
+                "corpus_of_record": "qdrant" if _qdrant_backend() else "memory",
             },
         }
 
@@ -371,6 +415,7 @@ if FastAPI is not None:
                 detail=[{"code": issue.code, "message": issue.message} for issue in result.blocking_issues],
             )
         chunks = state._tag_chunks(result.chunks)
+        state._drop_local_document(document_id=document_id, tenant_id=effective_tenant)
         added = state.retriever.upsert(chunks)
         state._all_chunks.extend(chunks)
         state.graph_expander = InMemoryGraphExpander(tuple(state._all_chunks))
@@ -473,6 +518,44 @@ if FastAPI is not None:
         }
         return result
 
+    @app.delete("/v1/documents/{document_id}", dependencies=[Depends(_require_api_key)])
+    def delete_document(
+        document_id: str,
+        tenant_id: str = "acme",
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        principal = resolve_principal(
+            authorization=authorization,
+            body_user_id="delete",
+            body_tenant_id=tenant_id,
+            body_groups=["engineering"],
+            body_clearance=Classification.INTERNAL,
+        )
+        _enforce_rate_limit("delete", principal.user_id)
+        effective_tenant = principal.tenant_id
+        removed = 0
+        delete_fn = getattr(state.retriever, "delete_document", None)
+        if callable(delete_fn):
+            removed = int(delete_fn(document_id=document_id, tenant_id=effective_tenant))
+        state._drop_local_document(document_id=document_id, tenant_id=effective_tenant)
+        state.graph_expander = InMemoryGraphExpander(tuple(state._all_chunks))
+        append_audit_event(
+            {
+                "event": "delete_document",
+                "document_id": document_id,
+                "tenant_id": effective_tenant,
+                "principal": principal.user_id,
+                "chunks_removed": removed,
+                "ts": datetime.now(UTC).isoformat(),
+            }
+        )
+        return {
+            "document_id": document_id,
+            "tenant_id": effective_tenant,
+            "chunks_removed": removed,
+            "principal_source": "jwt" if production_strict() else "request_body",
+        }
+
     @app.post("/v1/retrieve", dependencies=[Depends(_require_api_key)])
     def retrieve(
         request: QueryRequest,
@@ -552,6 +635,15 @@ if FastAPI is not None:
         )
         case_id = request.case_id or f"rag-{principal.tenant_id}-{uuid.uuid4().hex[:8]}"
         gateway = authorize_high_risk_answer(case_id=case_id, risk_flags=result.risk_flags)
+        hard_gate = production_strict() or os.getenv("HITL_HARD_GATE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        pending_hitl = hard_gate and (
+            gateway.blocked or gateway.requires_approval or not gateway.allowed
+        )
         if "declined_low_confidence" in result.risk_flags or "declined_unfaithful" in result.risk_flags:
             state.declined_count += 1
         latency_ms = (time.perf_counter() - started) * 1000
@@ -563,6 +655,7 @@ if FastAPI is not None:
                 "principal": principal.user_id,
                 "grounded": result.grounded,
                 "declined": "declined_low_confidence" in result.risk_flags,
+                "hitl_pending": pending_hitl,
                 "citation_ids": [c.citation_id for c in result.citations],
                 "pages": [c.page for c in result.citations],
                 "latency_ms": round(latency_ms, 2),
@@ -578,11 +671,28 @@ if FastAPI is not None:
                 "human_approval_required": "human_approval_required" in result.risk_flags,
             },
         )
+        if pending_hitl:
+            return {
+                "answer": "",
+                "grounded": False,
+                "declined": False,
+                "pending_approval": True,
+                "risk_flags": tuple(
+                    dict.fromkeys((*result.risk_flags, "human_approval_required", "hitl_pending"))
+                ),
+                "principal_source": "jwt" if production_strict() else "request_body",
+                "citations": [],
+                "trace": recorder.events,
+                "gateway": _gateway_payload(gateway),
+                "langfuse_export": langfuse_status,
+                "latency_ms": round(latency_ms, 2),
+            }
         return {
             "answer": result.answer,
             "grounded": result.grounded,
             "declined": "declined_low_confidence" in result.risk_flags
             or "declined_unfaithful" in result.risk_flags,
+            "pending_approval": False,
             "risk_flags": result.risk_flags,
             "principal_source": "jwt" if production_strict() else "request_body",
             "citations": [

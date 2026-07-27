@@ -234,9 +234,27 @@ class QdrantHybridRetriever:
     def upsert(self, chunks: tuple[Chunk, ...]) -> int:
         if not chunks:
             return 0
-        vectors = self._embedder.embed([c.text for c in chunks])
+        # Replace existing points for same tenant+document before write
+        by_doc: dict[tuple[str, str], None] = {}
+        for chunk in chunks:
+            by_doc[(chunk.tenant_id, chunk.document_id)] = None
+        for tenant_id, document_id in by_doc:
+            self.delete_document(document_id=document_id, tenant_id=tenant_id)
+
+        seen_hash: set[str] = set()
+        unique: list[Chunk] = []
+        for chunk in chunks:
+            if chunk.content_hash and chunk.content_hash in seen_hash:
+                continue
+            if chunk.content_hash:
+                seen_hash.add(chunk.content_hash)
+            unique.append(chunk)
+        if not unique:
+            return 0
+
+        vectors = self._embedder.embed([c.text for c in unique])
         points = []
-        for chunk, vec in zip(chunks, vectors, strict=True):
+        for chunk, vec in zip(unique, vectors, strict=True):
             points.append(
                 self._qmodels.PointStruct(
                     id=_point_id(chunk.chunk_id),
@@ -264,6 +282,36 @@ class QdrantHybridRetriever:
             )
         self._client.upsert(collection_name=self._collection, points=points)
         return len(points)
+
+    def delete_document(self, *, document_id: str, tenant_id: str) -> int:
+        """Delete points matching tenant+document. Returns estimated count removed."""
+        qfilter = self._qmodels.Filter(
+            must=[
+                self._qmodels.FieldCondition(
+                    key="tenant_id",
+                    match=self._qmodels.MatchValue(value=tenant_id),
+                ),
+                self._qmodels.FieldCondition(
+                    key="document_id",
+                    match=self._qmodels.MatchValue(value=document_id),
+                ),
+            ]
+        )
+        # Count then delete
+        points, _ = self._client.scroll(
+            collection_name=self._collection,
+            scroll_filter=qfilter,
+            limit=1000,
+            with_payload=False,
+            with_vectors=False,
+        )
+        count = len(points)
+        if count:
+            self._client.delete(
+                collection_name=self._collection,
+                points_selector=self._qmodels.FilterSelector(filter=qfilter),
+            )
+        return count
 
     @staticmethod
     def _matches_filters(filters: dict[str, str], chunk: Chunk) -> bool:

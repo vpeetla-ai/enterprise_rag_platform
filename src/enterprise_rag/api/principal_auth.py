@@ -2,7 +2,7 @@
 
 Demo mode (default): request-body Principal remains allowed (documented spoof risk).
 PRODUCTION_STRICT=true: Authorization Bearer JWT is required; body tenant/groups/clearance
-are ignored for access decisions.
+are ignored for access decisions. Optional aud/iss checks via RAG_JWT_AUD / RAG_JWT_ISS.
 """
 
 from __future__ import annotations
@@ -76,6 +76,26 @@ def verify_hs256_token(token: str, *, secret: str) -> dict[str, Any]:
             raise ValueError("jwt_invalid_iat") from exc
         if iat > now + 60:
             raise ValueError("jwt_iat_in_future")
+    # Optional aud/iss (prod baseline — set RAG_JWT_AUD / RAG_JWT_ISS under Strict)
+    expected_aud = os.getenv("RAG_JWT_AUD", "").strip()
+    if expected_aud:
+        aud = claims.get("aud")
+        if isinstance(aud, list):
+            ok = expected_aud in [str(a) for a in aud]
+        else:
+            ok = str(aud or "") == expected_aud
+        if not ok:
+            raise ValueError("jwt_aud_mismatch")
+    expected_iss = os.getenv("RAG_JWT_ISS", "").strip()
+    if expected_iss and str(claims.get("iss") or "") != expected_iss:
+        raise ValueError("jwt_iss_mismatch")
+    if "nbf" in claims:
+        try:
+            nbf = int(claims["nbf"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("jwt_invalid_nbf") from exc
+        if nbf > now + 60:
+            raise ValueError("jwt_not_yet_valid")
     return claims
 
 
@@ -111,7 +131,7 @@ def resolve_principal(
     body_groups: list[str],
     body_clearance: Classification,
 ) -> Principal:
-    """Resolve Principal for retrieve/answer.
+    """Resolve Principal for retrieve/answer/ingest.
 
     - Demo: body fields (client-asserted).
     - PRODUCTION_STRICT: Bearer JWT with RAG_JWT_SECRET; body identity ignored.

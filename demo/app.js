@@ -133,6 +133,15 @@ function applyReviewMode(health) {
   const strict = Boolean(health?.production_strict) || health?.review_mode === "strict";
   const badge = document.getElementById("modeBadge");
   const banner = document.getElementById("reviewModeBanner");
+  const retrieval = health?.retrieval || {};
+  const profileBits = [
+    `embed=${retrieval.embedding_provider || "?"}`,
+    `rerank=${retrieval.reranker || "?"}`,
+    `fusion=${retrieval.fusion || "?"}`,
+    `generator=${health?.generator || "?"}`,
+    `corpus=${health?.corpus_of_record || health?.retriever_backend || "?"}`,
+  ].join(" · ");
+  const claimAligned = Boolean(health?.product_bar?.claim_aligned);
   if (badge) {
     badge.textContent = strict ? "Strict mode" : "Demo mode";
     badge.classList.toggle("status-badge--warn", !strict);
@@ -143,10 +152,12 @@ function applyReviewMode(health) {
     banner.classList.toggle("review-mode-banner--strict", strict);
     if (strict) {
       banner.innerHTML =
-        "<strong>Strict review mode</strong><span>JWT-verified Principal is active (<code>PRODUCTION_STRICT</code>). Body identity fields are ignored for access decisions — Principal panel path.</span>";
+        `<strong>Strict review mode</strong><span>JWT + API key required. HITL hard-gates high-risk answers. Live profile: <code>${profileBits}</code>${
+          claimAligned ? "" : " — not yet claim-aligned (Qdrant + local/CE/LLM)."
+        }</span>`;
     } else {
       banner.innerHTML =
-        '<strong>Demo review mode</strong><span>Live demo defaults to client-asserted Principal (body fields). For Principal panels, prefer <strong>Strict</strong> — JWT-verified Principal under <code>PRODUCTION_STRICT=1</code> (<a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/adr/0006-verified-principal-jwt-strict.md" target="_blank" rel="noreferrer">ADR-0006</a>).</span>';
+        `<strong>Demo review mode</strong><span>Client-asserted Principal. Honest live profile: <code>${profileBits}</code> — hash/ScoreBoost/extractive is expected on the cheap Demo. For Principal panels use Strict (<a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/PROFILES.md" target="_blank" rel="noreferrer">PROFILES</a> · <a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/COST.md" target="_blank" rel="noreferrer">COST</a>).</span>`;
     }
   }
 }

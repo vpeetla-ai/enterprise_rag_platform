@@ -26,6 +26,18 @@ def _token(claims: dict, secret: str = "test-secret") -> str:
     return issue_hs256_token(body, secret=secret)
 
 
+def _strict(monkeypatch) -> None:
+    monkeypatch.setenv("PRODUCTION_STRICT", "true")
+    monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
+    monkeypatch.setenv("RAG_API_KEY", "test-key")
+    monkeypatch.delenv("RAG_JWT_AUD", raising=False)
+    monkeypatch.delenv("RAG_JWT_ISS", raising=False)
+
+
+def _headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}", "X-API-Key": "test-key"}
+
+
 def test_demo_mode_still_accepts_body_principal(monkeypatch):
     monkeypatch.delenv("PRODUCTION_STRICT", raising=False)
     monkeypatch.delenv("RAG_API_KEY", raising=False)
@@ -43,6 +55,8 @@ def test_health_exposes_review_mode(monkeypatch):
     assert body["principal_source"] == "request_body"
     assert body["production_strict"] is False
     assert body["retrieval"]["fusion"] == "rrf"
+    assert body["corpus_of_record"] in {"memory", "qdrant"}
+    assert "product_bar" in body
 
     monkeypatch.setenv("PRODUCTION_STRICT", "true")
     monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
@@ -50,23 +64,15 @@ def test_health_exposes_review_mode(monkeypatch):
     assert strict["review_mode"] == "strict"
     assert strict["principal_source"] == "jwt"
     assert strict["production_strict"] is True
+    assert strict["hitl_hard_gate"] is True
 
 
-def test_strict_requires_bearer(monkeypatch):
+def test_strict_requires_api_key(monkeypatch):
     monkeypatch.setenv("PRODUCTION_STRICT", "true")
     monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
     monkeypatch.delenv("RAG_API_KEY", raising=False)
-    resp = client.post("/v1/retrieve", json=QUERY_BODY)
-    assert resp.status_code == 401
-
-
-def test_strict_requires_secret(monkeypatch):
-    monkeypatch.setenv("PRODUCTION_STRICT", "true")
-    monkeypatch.delenv("RAG_JWT_SECRET", raising=False)
-    monkeypatch.delenv("RAG_API_KEY", raising=False)
     token = _token(
-        {"sub": "u1", "tenant_id": "acme", "groups": ["engineering"], "clearance": "internal"},
-        secret="unused",
+        {"sub": "u1", "tenant_id": "acme", "groups": ["engineering"], "clearance": "internal"}
     )
     resp = client.post(
         "/v1/retrieve",
@@ -76,10 +82,30 @@ def test_strict_requires_secret(monkeypatch):
     assert resp.status_code == 503
 
 
-def test_strict_uses_jwt_not_body_spoof(monkeypatch):
+def test_strict_requires_bearer(monkeypatch):
+    _strict(monkeypatch)
+    resp = client.post("/v1/retrieve", json=QUERY_BODY, headers={"X-API-Key": "test-key"})
+    assert resp.status_code == 401
+
+
+def test_strict_requires_secret(monkeypatch):
     monkeypatch.setenv("PRODUCTION_STRICT", "true")
-    monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
-    monkeypatch.delenv("RAG_API_KEY", raising=False)
+    monkeypatch.setenv("RAG_API_KEY", "test-key")
+    monkeypatch.delenv("RAG_JWT_SECRET", raising=False)
+    token = _token(
+        {"sub": "u1", "tenant_id": "acme", "groups": ["engineering"], "clearance": "internal"},
+        secret="unused",
+    )
+    resp = client.post(
+        "/v1/retrieve",
+        json=QUERY_BODY,
+        headers=_headers(token),
+    )
+    assert resp.status_code == 503
+
+
+def test_strict_uses_jwt_not_body_spoof(monkeypatch):
+    _strict(monkeypatch)
     token = _token(
         {
             "sub": "real-user",
@@ -91,7 +117,7 @@ def test_strict_uses_jwt_not_body_spoof(monkeypatch):
     resp = client.post(
         "/v1/retrieve",
         json=QUERY_BODY,
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_headers(token),
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -99,22 +125,18 @@ def test_strict_uses_jwt_not_body_spoof(monkeypatch):
 
 
 def test_strict_rejects_bad_signature(monkeypatch):
-    monkeypatch.setenv("PRODUCTION_STRICT", "true")
-    monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
-    monkeypatch.delenv("RAG_API_KEY", raising=False)
+    _strict(monkeypatch)
     token = _token({"sub": "u1", "tenant_id": "acme", "groups": ["engineering"]}, secret="wrong-secret")
     resp = client.post(
         "/v1/retrieve",
         json=QUERY_BODY,
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_headers(token),
     )
     assert resp.status_code == 401
 
 
 def test_strict_rejects_expired_token(monkeypatch):
-    monkeypatch.setenv("PRODUCTION_STRICT", "true")
-    monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
-    monkeypatch.delenv("RAG_API_KEY", raising=False)
+    _strict(monkeypatch)
     now = int(time.time())
     token = issue_hs256_token(
         {
@@ -129,15 +151,45 @@ def test_strict_rejects_expired_token(monkeypatch):
     resp = client.post(
         "/v1/retrieve",
         json=QUERY_BODY,
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_headers(token),
     )
     assert resp.status_code == 401
 
 
+def test_strict_rejects_aud_mismatch(monkeypatch):
+    _strict(monkeypatch)
+    monkeypatch.setenv("RAG_JWT_AUD", "enterprise-rag")
+    token = _token(
+        {
+            "sub": "u1",
+            "tenant_id": "acme",
+            "groups": ["engineering"],
+            "aud": "wrong-audience",
+        }
+    )
+    resp = client.post("/v1/retrieve", json=QUERY_BODY, headers=_headers(token))
+    assert resp.status_code == 401
+
+
+def test_strict_accepts_aud_when_configured(monkeypatch):
+    _strict(monkeypatch)
+    monkeypatch.setenv("RAG_JWT_AUD", "enterprise-rag")
+    monkeypatch.setenv("RAG_JWT_ISS", "vpeetla-panel")
+    token = _token(
+        {
+            "sub": "u1",
+            "tenant_id": "acme",
+            "groups": ["engineering"],
+            "aud": "enterprise-rag",
+            "iss": "vpeetla-panel",
+        }
+    )
+    resp = client.post("/v1/retrieve", json=QUERY_BODY, headers=_headers(token))
+    assert resp.status_code == 200
+
+
 def test_strict_ingest_binds_tenant(monkeypatch):
-    monkeypatch.setenv("PRODUCTION_STRICT", "true")
-    monkeypatch.setenv("RAG_JWT_SECRET", "test-secret")
-    monkeypatch.delenv("RAG_API_KEY", raising=False)
+    _strict(monkeypatch)
     token = _token(
         {"sub": "writer", "tenant_id": "acme", "groups": ["engineering"], "clearance": "internal"}
     )
@@ -153,8 +205,14 @@ def test_strict_ingest_binds_tenant(monkeypatch):
             "groups": ["engineering"],
             "metadata": {"effective_date": "2026-01-01"},
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_headers(token),
     )
     assert resp.status_code == 200
     assert resp.json()["tenant_id"] == "acme"
     assert resp.json()["principal_source"] == "jwt"
+
+
+def test_ops_metrics_requires_key_under_strict(monkeypatch):
+    _strict(monkeypatch)
+    assert client.get("/v1/ops/metrics").status_code == 401
+    assert client.get("/v1/ops/metrics", headers={"X-API-Key": "test-key"}).status_code == 200

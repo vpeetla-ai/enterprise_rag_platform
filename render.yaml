@@ -78,5 +78,13 @@ services:
         value: "false"
       - key: GROQ_API_KEY
         sync: false
+      - key: HITL_HARD_GATE
+        value: "true"
+      - key: RAG_JWT_AUD
+        value: "enterprise-rag"
+      - key: RAG_JWT_ISS
+        value: "vpeetla-panel"
+      - key: RAG_SEED_DEMO_CORPUS
+        value: "true"
       - key: CORS_ORIGINS
         value: "https://enterprise-rag-platform-eta.vercel.app,http://localhost:3000"

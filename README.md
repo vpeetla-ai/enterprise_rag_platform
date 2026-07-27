@@ -22,7 +22,7 @@ git clone https://github.com/vpeetla-ai/vpeetla-ai-skills.git
 
 > **First-run note:** The Render API sleeps after inactivity on the free tier — the first request takes ~50s to wake, and the seeded corpus re-ingests on cold start. If a query returns empty, wait and retry once.
 
-**Product bar (top-1% PDF Q&A):** hybrid BM25 + dense with **RRF**, optional cross-encoder rerank, **page-specific citations** from server PDF ingest, grounded answers with **decline** + faithfulness checks, and Demo vs Strict principal trust (ADR-0006/0009).
+**Product bar (top-1% PDF Q&A):** text-layer PDFs with **page-specific citations**, hybrid BM25 + dense **RRF**, optional cross-encoder, grounded answers with **decline** + citation-span faithfulness, Demo vs Strict trust (ADR-0006/0009). Live Demo may honestly run hash/ScoreBoost/extractive; Strict + Qdrant is the claim-aligned path (`/health.product_bar.claim_aligned`).
 
 Production RAG is a governed intelligence system, not a vector database wrapper. This project is a reference implementation and architecture package for an enterprise retrieval-augmented generation platform with access-aware retrieval, context engineering, evaluation, guardrails, observability, and operational decision records.
 
@@ -76,16 +76,16 @@ Study UI: [ai-architect-interview-playbook.vercel.app](https://ai-architect-inte
 | Retriever / Reranker ports | **Implemented** | Protocols + startup-loaded reranker |
 | Cross-encoder reranker | **Implemented (Strict image)** | `RAG_RERANKER=cross_encoder` in full Docker; Demo may use `score_boost` |
 | Decline-to-answer | **Implemented** | Per-scale thresholds; faithfulness may decline |
-| Faithfulness gate | **Implemented** | Lexical entailment; no citation spoof fallback |
-| LLM grounded generator | **Partial** | `GENERATOR=llm` when keys set; default extractive / `MOCK_LLM` for CI |
-| Pipeline telemetry spans | **Implemented** | Per-request `EventRecorder` + audit JSONL + p95 |
-| Guardrails + HITL risk flags | **Implemented** | PII redaction, `human_approval_required` |
-| HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/strategies` |
+| Faithfulness gate | **Implemented** | Citation-span overlap (`FAITHFULNESS_MIN_OVERLAP`); no citation spoof |
+| LLM grounded generator | **Partial** | `GENERATOR=llm` when keys set; Demo/CI often extractive / `MOCK_LLM` |
+| HITL hard-gate | **Implemented** | Strict / `HITL_HARD_GATE` withholds answer body (`pending_approval`) |
+| Ingest lifecycle | **Implemented** | Replace-by-document_id + `DELETE /v1/documents/{id}` + content_hash dedupe |
+| HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/documents/{id}`, `/v1/strategies` |
 | Ingestion data contract + lineage | **Implemented** | 422 blocking issues; `content_hash` + page bounds |
-| Golden eval / GER CI gate | **Implemented** | Shared registry + local page citation tests |
-| Vector store adapter (Qdrant) | **Implemented** | Real vectors + BM25+RRF hybrid (legacy scroll opt-in only) |
-| OCR for scanned PDFs | **Partial** | `RAG_OCR_ENABLED` → PyMuPDF OCR; else `ocr_required` ([OCR.md](docs/OCR.md)) |
-| Rate limit | **Implemented** | `RAG_RATE_LIMIT_PER_MIN` on ingest/retrieve/answer |
+| Golden eval / GER CI gate | **Implemented** | Shared registry + page/faithfulness metric gates |
+| Vector store adapter (Qdrant) | **Implemented** | Real vectors + BM25+RRF; compose Strict for corpus-of-record |
+| OCR for scanned PDFs | **Optional** | Text-layer is the product bar; `RAG_OCR_ENABLED` only with host OCR deps |
+| Rate limit | **Implemented** | `RAG_RATE_LIMIT_PER_MIN` on ingest/retrieve/answer (single-process) |
 | AegisAI gateway bridge | **Implemented** | Ingest + high-risk answers |
 | Langfuse trace export | **Implemented** | When `LANGFUSE_*` set |
 | Knowledge graph expansion | **Implemented** | In-memory entity expander |

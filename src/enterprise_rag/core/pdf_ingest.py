@@ -1,7 +1,8 @@
-"""Server-side PDF page extraction (ADR-0007)."""
+"""Server-side PDF page extraction (ADR-0007) + optional OCR (Phase 5)."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 
@@ -18,6 +19,10 @@ class PdfExtractError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+def ocr_enabled() -> bool:
+    return os.getenv("RAG_OCR_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def extract_pdf_pages(
@@ -49,8 +54,7 @@ def extract_pdf_pages(
 
     for i in range(limit):
         page = doc.load_page(i)
-        text = page.get_text("text") or ""
-        text = text.strip()
+        text = (page.get_text("text") or "").strip()
         if total_chars + len(text) > max_chars:
             remain = max(0, max_chars - total_chars)
             text = text[:remain]
@@ -61,15 +65,65 @@ def extract_pdf_pages(
         total_chars += len(text)
         pages.append((i + 1, text))
 
-    doc.close()
     if not any(t.strip() for _, t in pages):
+        if ocr_enabled():
+            ocr_pages, ocr_chars, ocr_warnings = _ocr_extract(doc, max_pages=limit, max_chars=max_chars)
+            doc.close()
+            if not any(t.strip() for _, t in ocr_pages):
+                raise PdfExtractError(
+                    "ocr_failed",
+                    "OCR enabled but produced no text. Install Tesseract + pymupdf OCR support, "
+                    "or upload a text-layer PDF.",
+                )
+            return PdfExtractResult(
+                pages=tuple(ocr_pages),
+                page_count=len(ocr_pages),
+                char_count=ocr_chars,
+                warnings=tuple([*warnings, "ocr_used", *ocr_warnings]),
+            )
+        doc.close()
         raise PdfExtractError(
             "ocr_required",
-            "No extractable text (likely scanned PDF). Enable OCR path or upload a text PDF.",
+            "No extractable text (likely scanned PDF). Set RAG_OCR_ENABLED=true with OCR deps, "
+            "or upload a text-layer PDF.",
         )
+
+    doc.close()
     return PdfExtractResult(
         pages=tuple(pages),
         page_count=len(pages),
         char_count=total_chars,
         warnings=tuple(warnings),
     )
+
+
+def _ocr_extract(
+    doc: object,
+    *,
+    max_pages: int,
+    max_chars: int,
+) -> tuple[list[tuple[int, str]], int, list[str]]:
+    """Best-effort OCR via PyMuPDF TextPage OCR (needs Tesseract on host)."""
+    warnings: list[str] = []
+    pages: list[tuple[int, str]] = []
+    total_chars = 0
+    for i in range(max_pages):
+        page = doc.load_page(i)  # type: ignore[attr-defined]
+        text = ""
+        try:
+            # PyMuPDF >= 1.23 — requires system tesseract
+            tp = page.get_textpage_ocr(dpi=150, full=True)  # type: ignore[attr-defined]
+            text = (page.get_text("text", textpage=tp) or "").strip()
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"ocr_page_error:{i + 1}:{type(exc).__name__}")
+            continue
+        if total_chars + len(text) > max_chars:
+            remain = max(0, max_chars - total_chars)
+            text = text[:remain]
+            warnings.append("truncated_chars")
+            if text:
+                pages.append((i + 1, text))
+            break
+        total_chars += len(text)
+        pages.append((i + 1, text))
+    return pages, total_chars, warnings

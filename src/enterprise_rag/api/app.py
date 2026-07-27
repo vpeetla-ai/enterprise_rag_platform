@@ -31,6 +31,7 @@ except ImportError:  # pragma: no cover
     Field = lambda *args, **kwargs: None  # type: ignore[assignment,misc]
 
 from enterprise_rag.api.principal_auth import production_strict, resolve_principal
+from enterprise_rag.api.rate_limit import get_limiter
 from enterprise_rag.core.entity_extract import extract_entities
 from enterprise_rag.core.generator import build_generator
 from enterprise_rag.core.graph_expander import InMemoryGraphExpander
@@ -112,6 +113,18 @@ class AppState:
         self.declined_count = 0
         self.reranker = build_reranker()
         self.generator = build_generator()
+        warmup = getattr(self.reranker, "warmup", None)
+        if callable(warmup) and os.getenv("RAG_RERANKER", "").strip().lower() == "cross_encoder":
+            if os.getenv("RAG_RERANKER_WARMUP", "true").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }:
+                try:
+                    warmup()
+                except Exception:  # noqa: BLE001 — boot should not die if CE weights missing
+                    pass
         self._seed_demo_corpus()
         self.graph_expander = InMemoryGraphExpander(tuple(self._all_chunks))
 
@@ -199,6 +212,14 @@ def _require_api_key(x_api_key: Annotated[str | None, Header()] = None) -> None:
         return
     if not x_api_key or not secrets.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+
+def _enforce_rate_limit(route: str, identity: str) -> None:
+    if os.getenv("RAG_RATE_LIMIT_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+        return
+    key = f"{route}:{identity or 'anon'}"
+    if not get_limiter().allow(key):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded — retry shortly")
 
 
 def _pages_from_request(pages: list[dict[str, Any]] | None) -> tuple[tuple[int, str], ...]:
@@ -323,6 +344,7 @@ if FastAPI is not None:
             body_groups=groups,
             body_clearance=classification,
         )
+        _enforce_rate_limit("ingest", principal.user_id)
         effective_tenant = principal.tenant_id
         effective_groups = list(principal.groups) if production_strict() else groups
         cid = case_id or f"ingest-{document_id}-{uuid.uuid4().hex[:8]}"
@@ -464,6 +486,7 @@ if FastAPI is not None:
             body_groups=request.groups,
             body_clearance=request.clearance,
         )
+        _enforce_rate_limit("retrieve", principal.user_id)
         hits = state.retriever.search(
             RetrievalQuery(
                 query=request.query,
@@ -509,6 +532,7 @@ if FastAPI is not None:
             body_groups=request.groups,
             body_clearance=request.clearance,
         )
+        _enforce_rate_limit("answer", principal.user_id)
         pipeline = RagPipeline(
             state.retriever,
             generator=state.generator,

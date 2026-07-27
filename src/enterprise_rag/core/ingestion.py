@@ -50,36 +50,62 @@ class DocumentChunker:
         for page_number, page_text in document.pages:
             normalized = re.sub(r"[ \t]+", " ", page_text).strip()
             normalized = re.sub(r"\n{3,}", "\n\n", normalized)
-            words = normalized.split()
-            if not words:
-                continue
-            step = self.max_words - self.overlap_words
-            char_cursor = 0
-            for start in range(0, len(words), step):
-                window = words[start : start + self.max_words]
-                text = " ".join(window)
-                if not text:
+            # Layout-aware: split on blank lines / heading-like lines, stay page-bounded.
+            sections = self._page_sections(normalized)
+            for section in sections:
+                words = section.split()
+                if not words:
                     continue
-                char_start = normalized.find(window[0], char_cursor)
-                if char_start < 0:
-                    char_start = char_cursor
-                char_end = char_start + len(text)
-                char_cursor = char_start + 1
-                chunks.append(
-                    self._make_chunk(
-                        document,
-                        index=global_index,
-                        text=text,
-                        page_start=page_number,
-                        page_end=page_number,
-                        char_start=char_start,
-                        char_end=char_end,
+                step = self.max_words - self.overlap_words
+                char_cursor = 0
+                for start in range(0, len(words), step):
+                    window = words[start : start + self.max_words]
+                    text = " ".join(window)
+                    if not text:
+                        continue
+                    char_start = normalized.find(window[0], char_cursor)
+                    if char_start < 0:
+                        char_start = char_cursor
+                    char_end = char_start + len(text)
+                    char_cursor = char_start + 1
+                    chunks.append(
+                        self._make_chunk(
+                            document,
+                            index=global_index,
+                            text=text,
+                            page_start=page_number,
+                            page_end=page_number,
+                            char_start=char_start,
+                            char_end=char_end,
+                        )
                     )
-                )
-                global_index += 1
-                if start + self.max_words >= len(words):
-                    break
+                    global_index += 1
+                    if start + self.max_words >= len(words):
+                        break
         return IngestionResult(chunks=tuple(chunks), issues=tuple(issues))
+
+    @staticmethod
+    def _page_sections(page_text: str) -> list[str]:
+        """Split a page into layout sections (paragraph / heading boundaries)."""
+        if not page_text.strip():
+            return []
+        blocks = re.split(r"\n{2,}", page_text)
+        sections: list[str] = []
+        buf: list[str] = []
+        heading = re.compile(r"^(?:#{1,6}\s+\S+|[A-Z][A-Z0-9][A-Z0-9 /&-]{6,})$")
+        for block in blocks:
+            block = block.strip()
+            if not block:
+                continue
+            lines = block.split("\n")
+            if heading.match(lines[0].strip()) and buf:
+                sections.append("\n".join(buf).strip())
+                buf = [block]
+            else:
+                buf.append(block)
+        if buf:
+            sections.append("\n".join(buf).strip())
+        return sections or [page_text]
 
     def _chunk_flat_body(
         self, document: SourceDocument, issues: list[IngestionIssue]

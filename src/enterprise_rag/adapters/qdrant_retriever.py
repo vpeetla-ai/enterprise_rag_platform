@@ -1,4 +1,4 @@
-"""Optional Qdrant retriever — real vectors + filtered search (ADR-0008)."""
+"""Optional Qdrant retriever — dense ANN + BM25 + RRF (ADR-0008)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,16 @@ import uuid
 from datetime import UTC, datetime
 
 from enterprise_rag.core.access import AccessPolicy
-from enterprise_rag.core.embeddings import Embedder, build_embedder
+from enterprise_rag.core.embeddings import Embedder, build_embedder, cosine
 from enterprise_rag.core.models import (
     Chunk,
     Classification,
     RetrievalHit,
+    RetrievalMode,
     RetrievalQuery,
 )
+from enterprise_rag.core.retrieval import bm25_score, build_doc_freq, rrf_fuse
+from enterprise_rag.core.text import query_terms, tokenize
 
 
 def qdrant_available() -> bool:
@@ -30,7 +33,10 @@ def _point_id(chunk_id: str) -> str:
 
 
 class QdrantHybridRetriever:
-    """Dense ANN search with tenant filter; access policy still enforced post-fetch."""
+    """Hybrid retrieval: tenant-filtered dense ANN + BM25 over payload corpus, fused with RRF.
+
+    Access policy is enforced after fetch. Legacy zero-vector scroll is opt-in only.
+    """
 
     def __init__(
         self,
@@ -67,40 +73,135 @@ class QdrantHybridRetriever:
             ),
         )
 
+    def _tenant_filter(self, tenant_id: str):
+        return self._qmodels.Filter(
+            must=[
+                self._qmodels.FieldCondition(
+                    key="tenant_id",
+                    match=self._qmodels.MatchValue(value=tenant_id),
+                )
+            ]
+        )
+
+    def _scroll_tenant_chunks(self, tenant_id: str, *, limit: int = 500) -> list[Chunk]:
+        """Load tenant payload corpus for BM25 (demo/small-prod scale)."""
+        chunks: list[Chunk] = []
+        offset = None
+        while len(chunks) < limit:
+            points, offset = self._client.scroll(
+                collection_name=self._collection,
+                scroll_filter=self._tenant_filter(tenant_id),
+                limit=min(100, limit - len(chunks)),
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            if not points:
+                break
+            for point in points:
+                payload = point.payload or {}
+                chunk = _payload_to_chunk(str(payload.get("chunk_id") or point.id), payload)
+                chunks.append(chunk)
+            if offset is None:
+                break
+        return chunks
+
     def search(self, query: RetrievalQuery) -> tuple[RetrievalHit, ...]:
         if os.getenv("RAG_ALLOW_LEGACY_SCROLL", "").strip().lower() in {"1", "true", "yes"}:
             return self._legacy_scroll(query)
 
+        corpus = self._scroll_tenant_chunks(query.tenant_id)
+        eligible = [
+            c
+            for c in corpus
+            if self._access_policy.can_read(query.principal, c)
+            and self._matches_filters(query.filters, c)
+        ]
+        if not eligible:
+            return ()
+
+        by_id = {c.chunk_id: c for c in eligible}
+        terms = query_terms(query.query)
+        doc_freq = build_doc_freq(eligible)
+        lengths = [
+            len(tokenize(f"{c.source_title} {c.text}")) for c in eligible
+        ]
+        avg_len = (sum(lengths) / len(lengths)) if lengths else 1.0
+
+        lexical_ranked: list[tuple[str, float]] = []
+        for chunk in eligible:
+            chunk_terms = tokenize(
+                f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"
+            )
+            lex = bm25_score(
+                terms,
+                chunk_terms,
+                doc_freq=doc_freq,
+                n_docs=len(eligible),
+                avg_len=avg_len,
+            )
+            title_boost = len(set(terms) & set(tokenize(chunk.source_title))) * 0.5
+            score = lex + title_boost
+            if score > 0:
+                lexical_ranked.append((chunk.chunk_id, score))
+        lexical_ranked.sort(key=lambda x: x[1], reverse=True)
+
+        dense_ranked: list[tuple[str, float]] = []
         q_vec = self._embedder.embed([query.query])[0]
-        qfilter = self._qmodels.Filter(
-            must=[
-                self._qmodels.FieldCondition(
-                    key="tenant_id",
-                    match=self._qmodels.MatchValue(value=query.tenant_id),
-                )
-            ]
-        )
         results = self._client.search(
             collection_name=self._collection,
             query_vector=q_vec,
-            query_filter=qfilter,
+            query_filter=self._tenant_filter(query.tenant_id),
             limit=max(query.top_k * 4, 20),
             with_payload=True,
         )
-        hits: list[RetrievalHit] = []
         for point in results:
             payload = point.payload or {}
             chunk = _payload_to_chunk(str(payload.get("chunk_id") or point.id), payload)
-            if not self._access_policy.can_read(query.principal, chunk):
-                continue
+            if chunk.chunk_id not in by_id:
+                if not self._access_policy.can_read(query.principal, chunk):
+                    continue
+                by_id[chunk.chunk_id] = chunk
             score = float(point.score or 0.0)
             if score <= 0:
+                continue
+            dense_ranked.append((chunk.chunk_id, score))
+        dense_ranked.sort(key=lambda x: x[1], reverse=True)
+
+        if query.mode == RetrievalMode.KEYWORD:
+            fused = {cid: score for cid, score in lexical_ranked}
+            reason_sets = {cid: ("bm25", "qdrant") for cid, _ in lexical_ranked}
+        elif query.mode == RetrievalMode.SEMANTIC:
+            fused = {cid: score for cid, score in dense_ranked}
+            reason_sets = {cid: ("qdrant_dense",) for cid, _ in dense_ranked}
+        else:
+            fused = rrf_fuse(
+                [
+                    [cid for cid, _ in lexical_ranked],
+                    [cid for cid, _ in dense_ranked],
+                ]
+            )
+            lex_ids = {cid for cid, _ in lexical_ranked}
+            dense_ids = {cid for cid, _ in dense_ranked}
+            reason_sets = {}
+            for cid in fused:
+                reasons: list[str] = ["rrf", "qdrant"]
+                if cid in lex_ids:
+                    reasons.append("bm25")
+                if cid in dense_ids:
+                    reasons.append("dense")
+                reason_sets[cid] = tuple(reasons)
+
+        hits: list[RetrievalHit] = []
+        for cid, score in sorted(fused.items(), key=lambda x: x[1], reverse=True):
+            chunk = by_id.get(cid)
+            if not chunk:
                 continue
             hits.append(
                 RetrievalHit(
                     chunk=chunk,
                     score=score,
-                    reasons=("qdrant_dense", "tenant_filter"),
+                    reasons=reason_sets.get(cid, ("hybrid", "qdrant")),
                 )
             )
             if len(hits) >= query.top_k:
@@ -115,7 +216,7 @@ class QdrantHybridRetriever:
             with_payload=True,
         )
         hits: list[RetrievalHit] = []
-        query_terms = set(query.query.lower().split())
+        query_term_set = set(query.query.lower().split())
         for point in points:
             payload = point.payload or {}
             if str(payload.get("tenant_id", query.tenant_id)) != query.tenant_id:
@@ -123,7 +224,7 @@ class QdrantHybridRetriever:
             chunk = _payload_to_chunk(str(point.id), payload)
             if not self._access_policy.can_read(query.principal, chunk):
                 continue
-            overlap = len(query_terms & set(chunk.text.lower().split()))
+            overlap = len(query_term_set & set(chunk.text.lower().split()))
             if overlap <= 0:
                 continue
             hits.append(RetrievalHit(chunk=chunk, score=float(overlap), reasons=("legacy_scroll",)))
@@ -163,6 +264,10 @@ class QdrantHybridRetriever:
             )
         self._client.upsert(collection_name=self._collection, points=points)
         return len(points)
+
+    @staticmethod
+    def _matches_filters(filters: dict[str, str], chunk: Chunk) -> bool:
+        return all(chunk.metadata.get(key) == value for key, value in filters.items())
 
 
 def _payload_to_chunk(point_id: str, payload: dict) -> Chunk:
@@ -210,3 +315,7 @@ def _payload_to_chunk(point_id: str, payload: dict) -> Chunk:
         char_start=_opt_int("char_start"),
         char_end=_opt_int("char_end"),
     )
+
+
+# Keep cosine import available for unit tests that monkeypatch embedder similarity.
+_ = cosine

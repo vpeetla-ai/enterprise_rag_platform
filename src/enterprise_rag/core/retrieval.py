@@ -30,6 +30,43 @@ def rrf_fuse(
     return scores
 
 
+def bm25_score(
+    query_terms_list: list[str],
+    chunk_terms: list[str],
+    *,
+    doc_freq: dict[str, int],
+    n_docs: int,
+    avg_len: float,
+    k1: float = BM25_K1,
+    b: float = BM25_B,
+) -> float:
+    """Okapi BM25 with k1/b saturation — shared by memory and Qdrant hybrid paths."""
+    if not query_terms_list or not chunk_terms:
+        return 0.0
+    counts = Counter(chunk_terms)
+    dl = len(chunk_terms)
+    total = 0.0
+    n_docs = max(n_docs, 1)
+    for term in set(query_terms_list):
+        tf = counts.get(term, 0)
+        if tf == 0:
+            continue
+        df = doc_freq.get(term, 0)
+        idf = math.log(1 + (n_docs - df + 0.5) / (df + 0.5))
+        denom = tf + k1 * (1 - b + b * dl / max(avg_len, 1.0))
+        total += idf * (tf * (k1 + 1)) / denom
+    return total
+
+
+def build_doc_freq(chunks: tuple[Chunk, ...] | list[Chunk]) -> dict[str, int]:
+    freq: Counter[str] = Counter()
+    for chunk in chunks:
+        freq.update(
+            set(tokenize(f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"))
+        )
+    return dict(freq)
+
+
 class InMemoryHybridRetriever:
     """Hybrid retriever with access-before-ranking and RRF fusion."""
 
@@ -139,21 +176,13 @@ class InMemoryHybridRetriever:
         return tuple(hits)
 
     def _bm25(self, query_terms_list: list[str], chunk_terms: list[str]) -> float:
-        if not query_terms_list or not chunk_terms:
-            return 0.0
-        counts = Counter(chunk_terms)
-        dl = len(chunk_terms)
-        total = 0.0
-        n_docs = max(len(self._chunks), 1)
-        for term in set(query_terms_list):
-            tf = counts.get(term, 0)
-            if tf == 0:
-                continue
-            df = self._doc_freq.get(term, 0)
-            idf = math.log(1 + (n_docs - df + 0.5) / (df + 0.5))
-            denom = tf + BM25_K1 * (1 - BM25_B + BM25_B * dl / max(self._avg_len, 1.0))
-            total += idf * (tf * (BM25_K1 + 1)) / denom
-        return total
+        return bm25_score(
+            query_terms_list,
+            chunk_terms,
+            doc_freq=self._doc_freq,
+            n_docs=len(self._chunks),
+            avg_len=self._avg_len,
+        )
 
     @staticmethod
     def _recency_boost(updated_at: datetime) -> float:
@@ -166,12 +195,7 @@ class InMemoryHybridRetriever:
 
     @staticmethod
     def _build_doc_freq(chunks: tuple[Chunk, ...]) -> dict[str, int]:
-        freq: Counter[str] = Counter()
-        for chunk in chunks:
-            freq.update(
-                set(tokenize(f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"))
-            )
-        return dict(freq)
+        return build_doc_freq(chunks)
 
 
 def retrieval_profile() -> dict[str, str | bool]:

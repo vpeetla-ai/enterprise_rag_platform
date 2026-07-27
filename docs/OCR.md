@@ -6,11 +6,13 @@ Scanned PDFs with no extractable text return:
 {"detail":[{"code":"ocr_required","message":"..."}]}
 ```
 
-## Enable later
+## Enable OCR
 
 ```bash
 RAG_OCR_ENABLED=true
-# Provider TBD: ocrmypdf local or cloud OCR — cost labeled in PROFILES.md
+# Requires system Tesseract + PyMuPDF OCR path (get_textpage_ocr)
 ```
 
-Until enabled, upload a text-layer PDF or convert offline. Do not silently index empty pages.
+When enabled, `extract_pdf_pages` retries via PyMuPDF OCR. Failures return `ocr_failed` (not a silent empty index). Cost: CPU/time on the API host — labeled in [COST.md](COST.md) / [PROFILES.md](PROFILES.md).
+
+Until OCR deps are present, upload a text-layer PDF or convert offline.

@@ -1,9 +1,9 @@
 # Enterprise RAG Platform — Architecture Hub
 
-**Role in portfolio:** Knowledge layer — access-aware retrieval, context assembly, guardrails, and eval hooks.
+**Role in portfolio:** Knowledge layer — access-aware retrieval, page-cited PDF Q&A, context assembly, guardrails, and eval hooks.
 
-**Live demo:** [enterprise-rag-platform.vercel.app](https://enterprise-rag-platform.vercel.app)  
-**Related:** [ECOSYSTEM.md](ECOSYSTEM.md) · [ADR index](adr/)
+**Live demo:** [enterprise-rag-platform-eta.vercel.app](https://enterprise-rag-platform-eta.vercel.app)  
+**Program:** [TOP1PCT_ERAG_PROGRAM.md](TOP1PCT_ERAG_PROGRAM.md) · [PROFILES.md](PROFILES.md) · [ADR index](adr/)
 
 ---
 
@@ -15,6 +15,7 @@ flowchart TB
     VAP["venkat-ai-platform"]
     ACF["ai-content-factory"]
     AL["aegisloop-agentops-workbench"]
+    Demo["Glass-box demo UI"]
   end
 
   subgraph Gateway["aegisai-enterprise-agent-platform"]
@@ -24,10 +25,11 @@ flowchart TB
   subgraph RAG["enterprise_rag_platform"]
     API["FastAPI /v1/*"]
     PIPE["RagPipeline"]
-    RET["Retriever port"]
-    GR["Guardrails"]
-    EVAL["Offline metrics"]
-    TEL["EventRecorder spans"]
+    RET["Hybrid BM25 + dense + RRF"]
+    RR["Reranker CE / ScoreBoost"]
+    GR["Guardrails + faithfulness"]
+    EVAL["Offline metrics + GER"]
+    TEL["Per-request spans + audit"]
   end
 
   subgraph Obs["Observability"]
@@ -35,9 +37,11 @@ flowchart TB
   end
 
   Clients --> GW
+  Demo --> API
   GW --> API
   API --> PIPE
   PIPE --> RET
+  PIPE --> RR
   PIPE --> GR
   PIPE --> EVAL
   PIPE --> TEL
@@ -50,41 +54,46 @@ flowchart TB
 
 | Principle | Implementation |
 |-----------|----------------|
-| **Access before ranking** | `AccessPolicy` filters candidates before hybrid scoring ([ADR-0002](adr/0002-access-before-ranking.md)) |
-| **Hybrid retrieval** | BM25 + dense in-memory retriever; ports for vector DB ([ADR-0001](adr/0001-hybrid-retrieval.md)) |
-| **Versioned eval gates** | Golden queries + regression thresholds ([ADR-0003](adr/0003-versioned-evaluation-gates.md)) |
-| **Policy at boundary** | Guardrails emit `human_approval_required` for gateway consumers |
+| **Access before ranking** | `AccessPolicy` before BM25/dense scoring ([ADR-0002](adr/0002-access-before-ranking.md)) |
+| **Hybrid + RRF** | BM25 (k1/b) + dense embeddings fused with RRF ([ADR-0001](adr/0001-hybrid-retrieval.md), [ADR-0008](adr/0008-dual-demo-strict-retrieval-profiles.md)) |
+| **Page-aware PDF** | `/v1/ingest/pdf` + `Citation.page` ([ADR-0007](adr/0007-page-aware-ingest-and-citations.md)) |
+| **Strict principal** | JWT `exp` on retrieve/answer/**ingest** ([ADR-0006](adr/0006-verified-principal-jwt-strict.md), [ADR-0009](adr/0009-strict-ingest-principal-binding.md)) |
+| **Versioned eval gates** | Golden + adversarial suites ([ADR-0003](adr/0003-versioned-evaluation-gates.md)) |
+| **Policy at boundary** | Decline, faithfulness, `human_approval_required` for gateway consumers |
 
 ---
 
 ## Request path (`POST /v1/answer`)
 
 ```text
-Principal + tenant context
-  → AccessPolicy.filter(corpus)
-  → Retriever.retrieve(query, strategy)
-  → Reranker.rerank(candidates)
-  → ContextAssembler.build(citations)
-  → Guardrails.check(answer, evidence)
-  → Response + risk_flags + telemetry spans
+Principal (body Demo | JWT Strict)
+  → AccessPolicy (before score)
+  → BM25 + dense → RRF
+  → Rerank (optional)
+  → Decline if low confidence / inject / unfaithful
+  → ContextAssembler (page citations)
+  → Generator (extractive | llm)
+  → Guardrails (no citation spoof)
+  → Response + risk_flags + per-request trace
 ```
 
 | Stage | Module | Notes |
 |-------|--------|-------|
-| Ingest | `/v1/ingest` | Governed document intake |
-| Strategies | `/v1/strategies` | Multi-query, HyDE experiments (VAP promotes winners here) |
-| Answer | `/v1/answer` | Primary RAG surface for platform integrations |
+| Ingest | `/v1/ingest`, `/v1/ingest/pdf` | Text or page-structured PDF |
+| Strategies | `/v1/strategies` | Modes, fusion, embedders, generators |
+| Answer | `/v1/answer` | Primary RAG surface |
 
 ---
 
 ## Ports (extension points)
 
-| Port | v1 implementation | Planned |
-|------|-------------------|---------|
-| `Retriever` | `InMemoryHybridRetriever` | Qdrant / Pinecone adapter |
-| `Reranker` | `ScoreBoostReranker` | Cross-encoder |
-| Telemetry | `EventRecorder` in pipeline | Langfuse via `ops/langfuse_export.py` ✅ |
-| LLM synthesis | Configurable provider | Live path in prod deploy |
+| Port | v1 implementation | Notes |
+|------|-------------------|-------|
+| `Retriever` | `InMemoryHybridRetriever` · `QdrantHybridRetriever` | Real vectors + tenant filter on Qdrant |
+| `Reranker` | `ScoreBoostReranker` · `CrossEncoderReranker` | Startup-loaded; CE in full Docker |
+| `Embedder` | `hash` · `local` · `openai`/`gateway` | Dual posture (ADR-0008) |
+| `Generator` | `ExtractiveGenerator` · `LlmGroundedGenerator` | `MOCK_LLM` / `GENERATOR=llm` |
+| Telemetry | Per-request `EventRecorder` + audit JSONL | Langfuse export optional |
 
 ---
 
@@ -92,52 +101,21 @@ Principal + tenant context
 
 | Consumer | Integration |
 |----------|-------------|
-| **VAP** | RAG strategy lab compares strategies; promote adapter implementing `Retriever` |
-| **AegisAI** | Honor `risk_flags.human_approval_required` before returning sensitive answers |
-| **Content Factory** | Internal policy grounding via `/v1/answer` with tenant principal |
-| **AegisLoop** | Import `tests/fixtures/golden_queries.json` into mission regression |
+| **VAP** | RAG strategy lab / Enterprise RAG adapter |
+| **AegisAI** | Honor `risk_flags.human_approval_required` |
+| **Content Factory** | Policy grounding via `/v1/answer` |
+| **AegisLoop** | Golden fixtures / mission regression |
+| **Interview playbook** | Entries 02, 22, 23 |
 
 ---
 
 ## Implementation status
 
-| Area | Status |
-|------|--------|
-| Access-before-ranking | ✅ |
-| Hybrid in-memory retrieval | ✅ |
-| Reranker port + reference reranker | ✅ |
-| Pipeline telemetry spans | ✅ |
-| HTTP API (`/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies`) | ✅ |
-| Vector DB / graph backends | 🟡 Behind ports only |
-| Cross-encoder reranker | 🟡 Plug into `Reranker` |
-| Langfuse export | ✅ | `ops/langfuse_export.py` — set `LANGFUSE_*` on Render |
-| Online eval feedback loop | 🟡 Offline metrics in `eval/metrics.py` |
+See root [README Implementation Status](../README.md#implementation-status) for the honest capability table (including OCR **Not shipped**).
 
-Canonical org pattern: [TRACE_LINKED_OBSERVABILITY](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/docs/TRACE_LINKED_OBSERVABILITY.md). Pipeline spans export to Langfuse with eval scores (`grounded`, `citation_count`, `human_approval_required`).
+## Related docs
 
----
-
-## Deployment topology
-
-| Surface | Host | Notes |
-|---------|------|-------|
-| Demo UI | Vercel | Static `demo/` — glass-box workbench + API proxy |
-
-### Glass-box demo layout
-
-| Column | Role |
-|--------|------|
-| **Left** | Stack layers, live metrics (`/v1/ops/metrics`), tradeoffs, ADR links |
-| **Center** | RAG pipeline SVG — trace span replay from `/v1/answer` |
-| **Right** | Product UX — query, strategy, answer, citations, risk flags |
-
-Replay is post-response animation (not SSE). Eval compare and ingest stay in collapsed sections below the workbench.
-| API | Render / local | FastAPI, env-driven LLM keys |
-
----
-
-## ADRs
-
-- [0001 — Hybrid retrieval](adr/0001-hybrid-retrieval.md)
-- [0002 — Access before ranking](adr/0002-access-before-ranking.md)
-- [0003 — Versioned evaluation gates](adr/0003-versioned-evaluation-gates.md)
+- [STRICT_PANEL_PACK.md](STRICT_PANEL_PACK.md) — 3-minute PDF Q&A panel script  
+- [OCR.md](OCR.md) — scanned PDF `ocr_required` contract  
+- [LIVE_DEMO.md](LIVE_DEMO.md) — deploy  
+- [ECOSYSTEM.md](ECOSYSTEM.md) — spine map  

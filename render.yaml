@@ -66,11 +66,17 @@ services:
         sync: false
       - key: LANGFUSE_ENABLED
         value: "false"
+      # Strict profile intent (ADR-0008): local embed + CE + LLM when keys present.
+      # Qdrant stays off until QDRANT_URL is set (then set QDRANT_BACKEND=true).
       - key: EMBEDDING_PROVIDER
-        value: "hash"
+        value: "local"
       - key: RAG_RERANKER
         value: "cross_encoder"
       - key: GENERATOR
-        value: "extractive"
+        value: "llm"
+      - key: MOCK_LLM
+        value: "false"
+      - key: GROQ_API_KEY
+        sync: false
       - key: CORS_ORIGINS
         value: "https://enterprise-rag-platform-eta.vercel.app,http://localhost:3000"

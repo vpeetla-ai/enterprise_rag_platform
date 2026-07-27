@@ -120,7 +120,7 @@ class RagPipeline:
             if "faithfulness_failed" in answer.risk_flags and os.getenv(
                 "FAITHFULNESS_DECLINE", "true"
             ).strip().lower() in {"1", "true", "yes", "on"}:
-                with self.recorder.span("rag.faithfulness", status="failed"):
+                with self.recorder.span("rag.faithfulness", gate="failed"):
                     return Answer(
                         answer=DECLINE_MESSAGE,
                         citations=(),
@@ -131,6 +131,8 @@ class RagPipeline:
                             )
                         ),
                     )
+            with self.recorder.span("rag.faithfulness", gate="ok"):
+                pass
             return Answer(
                 answer=answer.answer,
                 citations=answer.citations,

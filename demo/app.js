@@ -325,17 +325,28 @@ async function ingestBody({ title, body, filename = "upload.txt" }) {
     throw new Error("API not reachable — Render may still be waking up");
   }
   const documentId = `upload-${Date.now()}`;
+  const MAX_CHARS = 50000;
+  let payloadBody = body;
+  let truncNote = "";
+  if (body.length > MAX_CHARS) {
+    payloadBody = body.slice(0, MAX_CHARS);
+    truncNote = ` Truncated to ${MAX_CHARS} chars (flat ingest is non-page mode).`;
+  }
   status.textContent = "Ingesting via API…";
   const data = await apiPost("/v1/ingest", {
     ...basePayload(),
     document_id: documentId,
     title,
-    body: body.slice(0, 50000),
+    body: payloadBody,
     uri: `upload://${filename}`,
     owner: "demo-user",
-    metadata: { source: "demo-upload", filename },
+    metadata: {
+      source: "demo-upload",
+      filename,
+      ...(truncNote ? { truncated: "true" } : {}),
+    },
   });
-  status.textContent = `Ingested "${title}" — ${data.chunks_added} chunks added.`;
+  status.textContent = `Ingested "${title}" — ${data.chunks_added} chunks added.${truncNote}`;
   document.getElementById("query").value = SAMPLE_DOC.sampleQuery;
   return data;
 }
@@ -464,19 +475,29 @@ document.getElementById("ask").addEventListener("click", async () => {
     }
   } catch (error) {
     const h = humanizeApiError(error.message);
-    setStatus(
-      h.title + " — showing demo_fallback (not a live run)",
-      "error",
-      (h.hint ? h.hint + " · " : "") + h.detail
+    const unreachable = /not reachable|waking|Failed to fetch|NetworkError|timeout/i.test(
+      error.message || ""
     );
     document.getElementById("activeQuery").textContent = `Question: ${query}`;
     document.getElementById("activeQuery").classList.remove("hidden");
     window.GlassBox?.showApiFailure(h.title);
-    const demo = window.GlassBox?.demoAnswer;
-    if (demo) {
-      document.getElementById("answer").textContent = demo.answer;
-      setAnswerTone("fallback", "demo_fallback");
-      replayGlassBox(demo, "fallback");
+    if (unreachable) {
+      setStatus(
+        h.title + " — showing demo_fallback (not a live run)",
+        "error",
+        (h.hint ? h.hint + " · " : "") + h.detail
+      );
+      const demo = window.GlassBox?.demoAnswer;
+      if (demo) {
+        document.getElementById("answer").textContent = demo.answer;
+        setAnswerTone("fallback", "demo_fallback");
+        replayGlassBox(demo, "fallback");
+      }
+    } else {
+      setStatus(h.title, "error", (h.hint ? h.hint + " · " : "") + h.detail);
+      document.getElementById("answer").textContent =
+        "Live request failed — fix auth/API and retry. demo_fallback is reserved for unreachable API only.";
+      setAnswerTone("fallback", "error");
     }
   }
 });

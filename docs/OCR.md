@@ -15,4 +15,6 @@ RAG_OCR_ENABLED=true
 # Requires system Tesseract + PyMuPDF get_textpage_ocr — NOT installed in default Docker image
 ```
 
-Default Strict/Demo images stay slim. Convert scanned PDFs offline, or run OCR on a dedicated worker image. Cost notes: [COST.md](COST.md).
+When enabled, `extract_pdf_pages` retries via PyMuPDF OCR. Failures return `ocr_failed` (not a silent empty index).
+
+Default Strict/Demo images stay slim. Convert scanned PDFs offline, or run OCR on a dedicated worker image. Cost notes: [COST.md](COST.md) · [PROFILES.md](PROFILES.md).

@@ -11,8 +11,10 @@ RAG_RERANKER=score_boost         # ScoreBoost labeled in UI via /health
 GENERATOR=extractive             # or llm when GROQ_API_KEY set
 QDRANT_BACKEND=false
 RAG_SEED_DEMO_CORPUS=true        # reseed OK for Demo only
-MOCK_LLM=true
+MOCK_LLM=true                    # CI / offline
 HITL_HARD_GATE=false             # flags only; answer still returned
+RAG_RATE_LIMIT_PER_MIN=60
+RAG_OCR_ENABLED=false
 ```
 
 UI banner prints live `embed · rerank · generator · corpus` from `/health`.
@@ -28,11 +30,16 @@ RAG_JWT_AUD=enterprise-rag
 RAG_JWT_ISS=vpeetla-panel
 EMBEDDING_PROVIDER=local         # or openai|gateway
 RAG_RERANKER=cross_encoder
-GENERATOR=llm
+RAG_RERANKER_WARMUP=true
+GENERATOR=llm                    # falls back extractive if no LLM key
 QDRANT_BACKEND=true
 QDRANT_URL=http://qdrant:6333    # or Qdrant Cloud
 RAG_SEED_DEMO_CORPUS=false       # corpus of record — no reseed theater
 HITL_HARD_GATE=true
+RAG_DECLINE_THRESHOLD=0.001
+RAG_DECLINE_THRESHOLD_CE=-10.0   # calibrate for cross-encoder logits
+CORS_ORIGINS=https://enterprise-rag-platform-eta.vercel.app
+RAG_RATE_LIMIT_PER_MIN=60
 ```
 
 `/health.product_bar.claim_aligned` is true only when embed≠hash, CE, LLM, and Qdrant.

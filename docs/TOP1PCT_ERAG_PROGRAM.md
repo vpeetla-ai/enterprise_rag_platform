@@ -16,7 +16,11 @@
 
 ### Phase 0–5 (core)
 
-See prior log — page ingest, RRF, faithfulness, Strict JWT, panel pack shipped.
+- [x] Page-aware PDF ingest + citations + UI jump
+- [x] BM25 + dense RRF (memory + Qdrant); CE warmup; paraphrase eval CI
+- [x] LLM generator path + citation-span faithfulness + no cite spoof
+- [x] Strict JWT/`exp` + ingest bind; rate limit; CORS; audit/p95
+- [x] Panel pack + COST/PROFILES; OCR optional flag
 
 ### ROI moves → ≥8.5 (2026-07-27)
 
@@ -35,5 +39,5 @@ See prior log — page ingest, RRF, faithfulness, Strict JWT, panel pack shipped
 | Date | Note |
 |------|------|
 | 2026-07-26 | Program started; Phases 0–5 core shipped |
-| 2026-07-27 | Gap close vs plan (PR #10) |
+| 2026-07-27 | Gap close vs plan (PR #10): Qdrant hybrid RRF, eval CI gates, rate limit, OCR flag, CE warmup |
 | 2026-07-27 | ROI moves 1–7 implemented (Qdrant compose, HITL gate, span faithfulness, auth, lifecycle) |

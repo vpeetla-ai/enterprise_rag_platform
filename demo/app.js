@@ -210,7 +210,20 @@ function render(data, mode, query) {
   const citations = document.getElementById("citations");
   (data.citations || []).forEach((c) => {
     const li = document.createElement("li");
-    li.innerHTML = `<strong>${c.title}</strong><br/><a href="${c.uri}" target="_blank" rel="noreferrer">${c.uri}</a>`;
+    const pageLabel = c.page != null ? ` · p.${c.page}` : "";
+    const href =
+      c.page != null && lastPdfObjectUrl
+        ? `${lastPdfObjectUrl}#page=${c.page}`
+        : c.uri;
+    li.innerHTML = `<strong>${c.title || "Source"}${pageLabel}</strong><br/><a href="${href}" target="_blank" rel="noreferrer">${c.page != null ? "Open PDF at page " + c.page : c.uri}</a>`;
+    if (c.page != null && window.pdfViewerGoto) {
+      li.querySelector("a")?.addEventListener("click", (ev) => {
+        if (lastPdfObjectUrl) {
+          ev.preventDefault();
+          window.pdfViewerGoto(c.page);
+        }
+      });
+    }
     citations.appendChild(li);
   });
   const flags = document.getElementById("riskFlags");
@@ -268,30 +281,42 @@ function buildStrategyCard(strategy, retrieveData, answerData) {
   return card;
 }
 
+let lastPdfObjectUrl = null;
+let lastPdfDoc = null;
+
 async function extractFileText(file) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf")) {
+    // Client extract is preview-only; server /v1/ingest/pdf owns page provenance.
     const pdfjs = window.pdfjsLib;
     if (!pdfjs) throw new Error("PDF.js failed to load — try a .txt file instead");
     pdfjs.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     const buffer = await file.arrayBuffer();
+    if (lastPdfObjectUrl) URL.revokeObjectURL(lastPdfObjectUrl);
+    lastPdfObjectUrl = URL.createObjectURL(file);
     const pdf = await pdfjs.getDocument({ data: buffer }).promise;
-    const pages = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      pages.push(content.items.map((item) => item.str).join(" "));
-    }
-    const text = pages.join("\n\n").trim();
-    if (!text) {
-      throw new Error(
-        "No extractable text in PDF (scanned image PDFs are not supported — use .txt or paste text)"
-      );
-    }
-    return text;
+    lastPdfDoc = pdf;
+    window.pdfViewerGoto = async (pageNum) => {
+      const host = document.getElementById("pdfViewer");
+      if (!host || !lastPdfDoc) return;
+      host.classList.remove("hidden");
+      const page = await lastPdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.2 });
+      let canvas = host.querySelector("canvas");
+      if (!canvas) {
+        canvas = document.createElement("canvas");
+        host.innerHTML = "";
+        host.appendChild(canvas);
+      }
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+      host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    };
+    return { kind: "pdf", file, buffer };
   }
-  return file.text();
+  return { kind: "text", text: await file.text() };
 }
 
 async function ingestBody({ title, body, filename = "upload.txt" }) {
@@ -315,6 +340,34 @@ async function ingestBody({ title, body, filename = "upload.txt" }) {
   return data;
 }
 
+async function ingestPdfFile(file, title) {
+  const status = document.getElementById("ingestStatus");
+  if (!(await wakeApi())) {
+    throw new Error("API not reachable — Render may still be waking up");
+  }
+  const documentId = `upload-${Date.now()}`;
+  status.textContent = "Uploading PDF to server (page-aware ingest)…";
+  const form = new FormData();
+  form.append("file", file);
+  form.append("document_id", documentId);
+  form.append("title", title);
+  form.append("tenant_id", basePayload().tenant_id || "acme");
+  form.append("owner", "demo-user");
+  form.append("groups", (basePayload().groups || ["engineering"]).join(","));
+  const headers = {};
+  const apiKey = document.getElementById("apiKey")?.value?.trim();
+  if (apiKey) headers["X-API-Key"] = apiKey;
+  const res = await fetch(`${API}/v1/ingest/pdf`, { method: "POST", headers, body: form });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`PDF ingest failed (${res.status}): ${err.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  status.textContent = `Ingested PDF "${title}" — ${data.chunks_added} chunks · ${data.pdf?.page_count || "?"} pages.`;
+  document.getElementById("query").value = SAMPLE_DOC.sampleQuery;
+  return data;
+}
+
 async function ingestDocument() {
   const fileInput = document.getElementById("docFile");
   const status = document.getElementById("ingestStatus");
@@ -323,11 +376,15 @@ async function ingestDocument() {
     status.textContent = "Choose a PDF or text file first.";
     return;
   }
-  status.textContent = "Extracting text…";
-  const body = await extractFileText(file);
+  status.textContent = "Preparing upload…";
   const title =
     document.getElementById("docTitle").value.trim() || file.name.replace(/\.[^.]+$/, "");
-  await ingestBody({ title, body, filename: file.name });
+  const extracted = await extractFileText(file);
+  if (extracted.kind === "pdf") {
+    await ingestPdfFile(file, title);
+  } else {
+    await ingestBody({ title, body: extracted.text, filename: file.name });
+  }
 }
 
 async function loadSampleDocument() {

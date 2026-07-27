@@ -41,6 +41,9 @@ class SourceDocument:
     allowed_groups: frozenset[str]
     metadata: dict[str, str] = field(default_factory=dict)
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Optional page-structured ingest (ADR-0007). When set, chunker uses pages
+    # instead of flattening body across page boundaries.
+    pages: tuple[tuple[int, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -56,12 +59,12 @@ class Chunk:
     allowed_groups: frozenset[str]
     metadata: dict[str, str]
     updated_at: datetime
-    # Real lineage, not just an id derived from a hash — content_hash lets a
-    # caller detect whether a chunk's text actually changed since last seen;
-    # ingested_at is when *this* ingestion happened, distinct from updated_at
-    # (the source document's own timestamp, which a caller can set to anything).
     content_hash: str = ""
     ingested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    page_start: int | None = None
+    page_end: int | None = None
+    char_start: int | None = None
+    char_end: int | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +92,9 @@ class Citation:
     uri: str
     owner: str
     updated_at: datetime
+    page: int | None = None
+    chunk_id: str = ""
+    snippet: str = ""
 
 
 @dataclass(frozen=True)

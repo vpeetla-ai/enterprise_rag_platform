@@ -639,3 +639,13 @@ pre.rejected { border-color: rgba(220, 38, 38, 0.35); background: var(--vp-dange
 .strategy-card .hits li { margin-bottom: 0.25rem; }
 #citations { padding-left: 1.25rem; margin: 0.5rem 0; }
 #citations li { margin-bottom: 0.35rem; font-size: 0.9rem; }
+.pdf-viewer {
+  margin-top: 0.75rem;
+  border: 1px solid var(--vp-border);
+  border-radius: var(--vp-radius-sm);
+  background: var(--vp-bg-subtle);
+  padding: 0.5rem;
+  overflow: auto;
+  max-height: 420px;
+}
+.pdf-viewer canvas { max-width: 100%; height: auto; display: block; }

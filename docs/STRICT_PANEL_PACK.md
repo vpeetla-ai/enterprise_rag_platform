@@ -54,6 +54,16 @@ export RAG_JWT_SECRET=…                        # same as Strict process
 # → docs/artifacts/strict-receipts/<utc>-strict-receipt.md
 ```
 
+## PDF Q&A 3-minute panel script (top-1% product)
+
+1. `GET /health` → show `retrieval.fusion=rrf`, `page_citations=true`, `review_mode`.  
+2. Ask: “What is the mandatory API key rotation period at Zephyr Corporation?”  
+3. Show answer + citation **page** (seeded corpus uses page 2 for the 90-day fact).  
+4. Upload a text-layer PDF via demo UI → `/v1/ingest/pdf` → cite `p.N` with viewer jump.  
+5. Strict: mint JWT with `exp`, spoof body tenant — still acme; ingest cannot plant other tenants.
+
+See [TOP1PCT_ERAG_PROGRAM.md](./TOP1PCT_ERAG_PROGRAM.md) · [PROFILES.md](./PROFILES.md) · [OCR.md](./OCR.md).
+
 ## Two-minute spoof check (any Strict host)
 
 Without Bearer → 401/403. With Bearer → JWT principal wins; body `tenant_id=attacker` must not escalate clearance.

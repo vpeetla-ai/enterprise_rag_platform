@@ -38,24 +38,27 @@ Production RAG is a governed intelligence system, not a vector database wrapper.
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Access-before-ranking | **Implemented** | `AccessPolicy` before scoring. Demo: Principal from request body (ADR-0004). **`PRODUCTION_STRICT=true` + `RAG_JWT_SECRET`:** Principal from signed HS256 JWT; body spoof ignored (ADR-0006). |
-| Hybrid in-memory retrieval | **Implemented** | BM25-like + semantic proxy + freshness |
-| Retriever / Reranker ports | **Implemented** | Swap vector DB or cross-encoder behind protocols |
-| Reference reranker | **Implemented** | `CrossEncoderReranker` (sentence-transformers) + `ScoreBoostReranker` fallback |
-| Decline-to-answer | **Implemented** | `RAG_DECLINE_THRESHOLD` — `declined_low_confidence` risk flag |
-| Pipeline telemetry spans | **Implemented** | `EventRecorder` wired through `RagPipeline` |
+| Access-before-ranking | **Implemented** | `AccessPolicy` before scoring. Demo body Principal; Strict JWT (ADR-0006/0009). |
+| Hybrid retrieval (BM25 + dense + RRF) | **Implemented** | BM25 k1/b + embeddings (`hash`/`local`/`openai`) fused with RRF ([ADR-0008](docs/adr/0008-dual-demo-strict-retrieval-profiles.md)) |
+| Page-aware PDF ingest + citations | **Implemented** | `POST /v1/ingest/pdf` (PyMuPDF); `Citation.page` ([ADR-0007](docs/adr/0007-page-aware-ingest-and-citations.md)) |
+| Retriever / Reranker ports | **Implemented** | Protocols + startup-loaded reranker |
+| Cross-encoder reranker | **Implemented (Strict image)** | `RAG_RERANKER=cross_encoder` in full Docker; Demo may use `score_boost` |
+| Decline-to-answer | **Implemented** | Per-scale thresholds; faithfulness may decline |
+| Faithfulness gate | **Implemented** | Lexical entailment; no citation spoof fallback |
+| LLM grounded generator | **Partial** | `GENERATOR=llm` when keys set; default extractive / `MOCK_LLM` for CI |
+| Pipeline telemetry spans | **Implemented** | Per-request `EventRecorder` + audit JSONL + p95 |
 | Guardrails + HITL risk flags | **Implemented** | PII redaction, `human_approval_required` |
-| HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/strategies` |
-| Ingestion data contract + real lineage | **Implemented** | `/v1/ingest` rejects (422) documents with no owner/URI/near-empty content instead of silently indexing them; every chunk carries a real `content_hash` + `ingested_at`, preserved through entity-tagging, graph expansion, and the Qdrant round-trip. See [ADR-0005](docs/adr/0005-ingestion-data-contract-and-lineage.md) |
-| Golden eval fixtures (local) | **Implemented** | `tests/fixtures/golden_queries.json` |
-| Golden eval registry as a real CI gate | **Implemented** | `tests/test_golden_eval_gate.py` runs the shared `enterprise_rag_golden_v1` suite from [golden-eval-registry](https://github.com/vpeetla-ai/golden-eval-registry) against a real, isolated `RagPipeline` — CI checks out that repo and fails the build on regression, not just fixture validation |
-| Vector store adapter | **Implemented** | `QdrantHybridRetriever` behind `QDRANT_BACKEND=true` |
-| AegisAI gateway bridge | **Implemented** | `integrations/aegis_bridge.py` for ingest + high-risk answers |
-| OpenTelemetry exporters | **Removed** | Use **Langfuse** (`LANGFUSE_*`) — same as other platform repos |
-| Langfuse trace export | **Implemented** | `ops/langfuse_export.py` — pipeline spans + eval scores on `/v1/answer` |
-| Knowledge graph expansion | **Implemented** | `InMemoryGraphExpander` + ingest entity tagging |
-| API-key gate on `/v1/ingest`, `/v1/retrieve`, `/v1/answer` | **Implemented** | Set `RAG_API_KEY` on Render — these previously had zero caller auth at all |
-| Glass-box demo UX | **Implemented** | `demo/glassbox.js` — architecture rail + pipeline replay + product panel; trace from `/v1/answer` (replay, not SSE) |
+| HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/strategies` |
+| Ingestion data contract + lineage | **Implemented** | 422 blocking issues; `content_hash` + page bounds |
+| Golden eval / GER CI gate | **Implemented** | Shared registry + local page citation tests |
+| Vector store adapter (Qdrant) | **Implemented** | Real vectors + filtered search (legacy scroll opt-in only) |
+| OCR for scanned PDFs | **Not shipped** | Returns `ocr_required` until Phase-5 flag path |
+| AegisAI gateway bridge | **Implemented** | Ingest + high-risk answers |
+| Langfuse trace export | **Implemented** | When `LANGFUSE_*` set |
+| Knowledge graph expansion | **Implemented** | In-memory entity expander |
+| API-key gate | **Implemented** | `RAG_API_KEY` when set |
+| Glass-box demo UX | **Implemented** | Live spans preferred; `demo_fallback` only if API unreachable |
+| Dual Demo/Strict profiles | **Implemented** | See [docs/PROFILES.md](docs/PROFILES.md) · [TOP1PCT_ERAG_PROGRAM.md](docs/TOP1PCT_ERAG_PROGRAM.md) |
 
 See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for how this repo connects to VAP, AegisAI, and AgentOps.
 

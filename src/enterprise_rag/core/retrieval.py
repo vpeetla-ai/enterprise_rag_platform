@@ -1,100 +1,159 @@
-"""Access-aware hybrid retrieval with lexical, semantic, metadata, and recency signals."""
+"""Access-aware hybrid retrieval: BM25 (k1/b) + dense + RRF fusion (ADR-0001/0008)."""
 
 from __future__ import annotations
 
 import math
+import os
 from collections import Counter
 from datetime import UTC, datetime
 
 from enterprise_rag.core.access import AccessPolicy
+from enterprise_rag.core.embeddings import Embedder, build_embedder, cosine
 from enterprise_rag.core.models import Chunk, RetrievalHit, RetrievalMode, RetrievalQuery
 from enterprise_rag.core.text import query_terms, tokenize
 
+RRF_K = 60
+BM25_K1 = 1.2
+BM25_B = 0.75
+
+
+def rrf_fuse(
+    ranked_lists: list[list[str]],
+    *,
+    k: int = RRF_K,
+) -> dict[str, float]:
+    """Reciprocal rank fusion over lists of chunk_ids (best-first)."""
+    scores: dict[str, float] = {}
+    for ranked in ranked_lists:
+        for rank, chunk_id in enumerate(ranked, start=1):
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (k + rank)
+    return scores
+
 
 class InMemoryHybridRetriever:
-    """Reference retriever.
+    """Hybrid retriever with access-before-ranking and RRF fusion."""
 
-    Production deployments should back this interface with OpenSearch/BM25,
-    a vector store, metadata indexes, rerankers, and graph expansion.
-    """
-
-    def __init__(self, chunks: tuple[Chunk, ...], access_policy: AccessPolicy | None = None) -> None:
-        self._chunks = chunks
+    def __init__(
+        self,
+        chunks: tuple[Chunk, ...] = (),
+        access_policy: AccessPolicy | None = None,
+        embedder: Embedder | None = None,
+    ) -> None:
         self._access_policy = access_policy or AccessPolicy()
-        self._doc_freq = self._build_doc_freq(chunks)
+        self._embedder = embedder or build_embedder()
+        self._chunks: tuple[Chunk, ...] = ()
+        self._vectors: dict[str, list[float]] = {}
+        self._doc_freq: dict[str, int] = {}
+        self._avg_len = 1.0
+        if chunks:
+            self.upsert(chunks)
 
     def upsert(self, chunks: tuple[Chunk, ...]) -> int:
         if not chunks:
             return 0
         self._chunks = self._chunks + chunks
+        texts = [c.text for c in chunks]
+        vectors = self._embedder.embed(texts)
+        for chunk, vec in zip(chunks, vectors, strict=True):
+            self._vectors[chunk.chunk_id] = vec
         self._doc_freq = self._build_doc_freq(self._chunks)
+        lengths = [
+            len(tokenize(f"{c.source_title} {c.text}"))
+            for c in self._chunks
+        ]
+        self._avg_len = (sum(lengths) / len(lengths)) if lengths else 1.0
         return len(chunks)
 
     def search(self, query: RetrievalQuery) -> tuple[RetrievalHit, ...]:
         terms = query_terms(query.query)
-        hits: list[RetrievalHit] = []
+        eligible: list[Chunk] = []
         for chunk in self._chunks:
             if not self._access_policy.can_read(query.principal, chunk):
                 continue
             if not self._matches_filters(query.filters, chunk):
                 continue
-            score, reasons = self._score(terms, chunk, query.mode)
-            if score > 0:
-                hits.append(RetrievalHit(chunk=chunk, score=score, reasons=tuple(reasons)))
+            eligible.append(chunk)
+        if not eligible:
+            return ()
 
-        hits.sort(key=lambda hit: hit.score, reverse=True)
-        return tuple(hits[: query.top_k])
+        lexical_ranked: list[tuple[str, float]] = []
+        dense_ranked: list[tuple[str, float]] = []
+        q_vec = self._embedder.embed([query.query])[0]
 
-    def _score(
-        self, terms: list[str], chunk: Chunk, mode: RetrievalMode
-    ) -> tuple[float, list[str]]:
-        chunk_terms = tokenize(
-            f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"
-        )
-        title_terms = set(tokenize(chunk.source_title))
-        lexical = self._bm25_like(terms, chunk_terms)
-        semantic = self._semantic_proxy(terms, chunk_terms)
-        recency = self._recency_boost(chunk.updated_at)
-        score = 0.0
-        reasons: list[str] = []
+        for chunk in eligible:
+            chunk_terms = tokenize(
+                f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"
+            )
+            lex = self._bm25(terms, chunk_terms)
+            title_boost = len(set(terms) & set(tokenize(chunk.source_title))) * 0.5
+            lex_score = lex + title_boost
+            if lex_score > 0:
+                lexical_ranked.append((chunk.chunk_id, lex_score))
+            dense = cosine(q_vec, self._vectors.get(chunk.chunk_id, []))
+            if dense > 0:
+                dense_ranked.append((chunk.chunk_id, dense))
 
-        if mode in (RetrievalMode.HYBRID, RetrievalMode.KEYWORD):
-            score += lexical * 0.65
-            if lexical:
-                reasons.append("keyword_match")
-        if mode in (RetrievalMode.HYBRID, RetrievalMode.SEMANTIC):
-            score += semantic * 0.30
-            if semantic:
-                reasons.append("semantic_similarity")
-        title_overlap = len(set(terms) & title_terms)
-        if title_overlap:
-            score += title_overlap * 0.5
-            reasons.append("title_match")
-        if score > 0 and recency:
-            score += recency * 0.05
-            reasons.append("freshness_boost")
+        lexical_ranked.sort(key=lambda x: x[1], reverse=True)
+        dense_ranked.sort(key=lambda x: x[1], reverse=True)
 
-        return score, reasons
+        if query.mode == RetrievalMode.KEYWORD:
+            fused = {cid: score for cid, score in lexical_ranked}
+            reason_sets = {cid: ("bm25",) for cid, _ in lexical_ranked}
+        elif query.mode == RetrievalMode.SEMANTIC:
+            fused = {cid: score for cid, score in dense_ranked}
+            reason_sets = {cid: ("dense",) for cid, _ in dense_ranked}
+        else:
+            lists = [
+                [cid for cid, _ in lexical_ranked],
+                [cid for cid, _ in dense_ranked],
+            ]
+            fused = rrf_fuse(lists)
+            reason_sets = {}
+            lex_ids = {cid for cid, _ in lexical_ranked}
+            dense_ids = {cid for cid, _ in dense_ranked}
+            for cid in fused:
+                reasons: list[str] = ["rrf"]
+                if cid in lex_ids:
+                    reasons.append("bm25")
+                if cid in dense_ids:
+                    reasons.append("dense")
+                reason_sets[cid] = tuple(reasons)
 
-    def _bm25_like(self, query_terms: list[str], chunk_terms: list[str]) -> float:
-        if not query_terms or not chunk_terms:
+        by_id = {c.chunk_id: c for c in eligible}
+        hits: list[RetrievalHit] = []
+        for cid, score in sorted(fused.items(), key=lambda x: x[1], reverse=True):
+            chunk = by_id.get(cid)
+            if not chunk:
+                continue
+            recency = self._recency_boost(chunk.updated_at)
+            final = score + recency * 0.01
+            hits.append(
+                RetrievalHit(
+                    chunk=chunk,
+                    score=final,
+                    reasons=reason_sets.get(cid, ("hybrid",)),
+                )
+            )
+            if len(hits) >= query.top_k:
+                break
+        return tuple(hits)
+
+    def _bm25(self, query_terms_list: list[str], chunk_terms: list[str]) -> float:
+        if not query_terms_list or not chunk_terms:
             return 0.0
         counts = Counter(chunk_terms)
+        dl = len(chunk_terms)
         total = 0.0
-        for term in set(query_terms):
-            if term not in counts:
+        n_docs = max(len(self._chunks), 1)
+        for term in set(query_terms_list):
+            tf = counts.get(term, 0)
+            if tf == 0:
                 continue
-            idf = math.log((1 + len(self._chunks)) / (1 + self._doc_freq.get(term, 0))) + 1
-            total += counts[term] * idf
-        return total / math.sqrt(len(chunk_terms))
-
-    @staticmethod
-    def _semantic_proxy(query_terms: list[str], chunk_terms: list[str]) -> float:
-        query_set = set(query_terms)
-        chunk_set = set(chunk_terms)
-        if not query_set or not chunk_set:
-            return 0.0
-        return len(query_set & chunk_set) / len(query_set | chunk_set)
+            df = self._doc_freq.get(term, 0)
+            idf = math.log(1 + (n_docs - df + 0.5) / (df + 0.5))
+            denom = tf + BM25_K1 * (1 - BM25_B + BM25_B * dl / max(self._avg_len, 1.0))
+            total += idf * (tf * (BM25_K1 + 1)) / denom
+        return total
 
     @staticmethod
     def _recency_boost(updated_at: datetime) -> float:
@@ -113,3 +172,12 @@ class InMemoryHybridRetriever:
                 set(tokenize(f"{chunk.source_title} {chunk.text} {' '.join(chunk.metadata.values())}"))
             )
         return dict(freq)
+
+
+def retrieval_profile() -> dict[str, str | bool]:
+    return {
+        "dense": True,
+        "fusion": "rrf",
+        "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "hash"),
+        "reranker": os.getenv("RAG_RERANKER", "score_boost"),
+    }

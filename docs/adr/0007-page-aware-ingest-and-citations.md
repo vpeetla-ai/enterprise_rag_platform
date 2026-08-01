@@ -4,21 +4,27 @@
 
 Accepted
 
+## In one breath (panel)
+
+I'd chunk PDFs inside page boundaries and put `page` on citations — flattening pages into one body string is how "page 12" becomes a guessing game.
+
 ## Context
 
-Page-specific citations are a product requirement for PDF Q&A. Flattening PDF pages into a single `body` string and collapsing whitespace destroys page provenance. `Citation` previously had no page field.
+Page-specific citations are the product bar for PDF Q&A. Collapsing whitespace across pages destroys provenance. `Citation` had no page field.
+
+What I refused: "close enough" document-only cites sold as enterprise PDF Q&A.
 
 ## Decision
 
-1. Extend `Chunk` with optional `page_start`, `page_end`, `char_start`, `char_end`.
-2. Extend `Citation` with optional `page`, `chunk_id`, and `snippet`.
-3. Prefer server-side PDF parse (`POST /v1/ingest/pdf`) via PyMuPDF producing per-page text.
-4. Chunk **within** page boundaries (no cross-page windows).
-5. Flat `body` ingest remains for fixtures and non-PDF sources with `page=null`.
-6. Scanned PDFs with no extractable text return `422` with `code=ocr_required` until an OCR path is enabled.
+1. `Chunk`: optional `page_start`, `page_end`, `char_start`, `char_end`.
+2. `Citation`: optional `page`, `chunk_id`, `snippet`.
+3. Prefer `POST /v1/ingest/pdf` (PyMuPDF) with per-page text.
+4. Chunk **within** page boundaries — no cross-page windows.
+5. Flat `body` ingest stays for fixtures / non-PDF (`page=null`).
+6. Scanned PDFs with no extractable text → `422` `ocr_required` until OCR is enabled (optional, not the default bar).
 
 ## Consequences
 
-- Breaking for clients that assumed document-only citations.
-- UI must render `Title · p.N` and support page jump.
-- Eval gates must measure page citation accuracy.
+- Breaking for clients that assumed document-only citations
+- UI renders `Title · p.N` with page jump
+- Eval gates measure page citation accuracy — no invented accuracy % here

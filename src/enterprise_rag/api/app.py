@@ -319,6 +319,53 @@ if FastAPI is not None:
             or os.getenv("HITL_HARD_GATE", "").strip().lower() in {"1", "true", "yes", "on"},
         }
 
+    @app.get("/v1/observability/status")
+    def observability_status() -> dict[str, Any]:
+        """Compose-plane honesty — Demo vs Strict, retrieval SoT, optional Langfuse export."""
+        strict = production_strict()
+        backend = "qdrant" if _qdrant_backend() else "memory"
+        profile = retrieval_profile()
+        langfuse_keys = bool(
+            (os.getenv("LANGFUSE_PUBLIC_KEY") or "").strip()
+            and (os.getenv("LANGFUSE_SECRET_KEY") or "").strip()
+        )
+        return {
+            "source_of_truth": (
+                f"Retriever corpus ({backend}) + access-before-ranking principal filter; "
+                "not Langfuse"
+            ),
+            "exporters": [
+                {
+                    "name": "OpsMetrics",
+                    "state": "live",
+                    "detail": "GET /v1/ops/metrics (API-key gated when PRODUCTION_STRICT or OPS key set)",
+                },
+                {
+                    "name": "Langfuse",
+                    "state": "configured" if langfuse_keys else "unconfigured",
+                    "detail": "Optional answer-path export adapter — not the authorization ledger",
+                },
+            ],
+            "planes": {
+                "review_mode": "strict" if strict else "demo",
+                "production_strict": strict,
+                "principal_source": "jwt" if strict else "request_body",
+                "retriever_backend": backend,
+                "corpus_of_record": backend,
+                "retrieval": profile,
+                "generator": os.getenv("GENERATOR", "extractive"),
+                "hitl_hard_gate": strict
+                or os.getenv("HITL_HARD_GATE", "").strip().lower()
+                in {"1", "true", "yes", "on"},
+                "langfuse_configured": langfuse_keys,
+                "access_before_ranking": True,
+            },
+            "recommendation": (
+                "Demo uses request-body principal; Strict requires JWT. "
+                "Decline-to-answer and access-before-ranking stay product features, not bugs."
+            ),
+        }
+
     @app.get("/v1/ops/metrics", dependencies=[Depends(_require_ops_auth)])
     def ops_metrics() -> dict[str, Any]:
         total = state.query_count + state.answer_count

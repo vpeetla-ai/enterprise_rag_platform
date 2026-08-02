@@ -48,7 +48,7 @@ flowchart TB
 | --- | --- | --- |
 | Hybrid / multi-query / HyDE RAG experiments | `venkat-ai-platform` | Reference **production-shaped** retrieval port (`Retriever`, `Reranker`) and policy-before-ranking |
 | Gateway HITL for notify / destructive tools | `aegisai-enterprise-agent-platform` | Surfaces `human_approval_required` risk flags from guardrails for gateway consumers |
-| Content pipeline + publish | `ai-content-factory` | Can call `/v1/answer` with tenant principal for grounded internal policy answers |
+| Content pipeline + publish | `ai-content-factory` | **Wired (optional):** ACF research node calls `/v1/answer` when `ENTERPRISE_RAG_API_URL` is set (fail-soft to local vectors) |
 | Mission eval + traces | `aegisloop-agentops-workbench` | Shares eval vocabulary (grounding, evidence, policy); offline metrics in `eval/metrics.py` |
 
 ## Recommended wiring

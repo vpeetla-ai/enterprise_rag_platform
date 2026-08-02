@@ -1,4 +1,51 @@
-const API = (window.ENTERPRISE_RAG_API || "/api").replace(/\/$/, "");
+const DEFAULT_API = (window.ENTERPRISE_RAG_API || "/api").replace(/\/$/, "");
+const STRICT_PACK =
+  "https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/STRICT_PANEL_PACK.md";
+
+function resolveApiBase() {
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = (params.get("api") || params.get("strict_url") || "").trim().replace(/\/$/, "");
+  if (fromQuery) {
+    try {
+      sessionStorage.setItem("erag_api_base", fromQuery);
+    } catch {
+      /* private mode */
+    }
+    return fromQuery;
+  }
+  try {
+    const stored = (sessionStorage.getItem("erag_api_base") || "").trim().replace(/\/$/, "");
+    if (stored) return stored;
+  } catch {
+    /* private mode */
+  }
+  return DEFAULT_API;
+}
+
+let API = resolveApiBase();
+
+function setApiBase(url) {
+  API = String(url || DEFAULT_API).replace(/\/$/, "");
+  try {
+    if (!url || API === DEFAULT_API) sessionStorage.removeItem("erag_api_base");
+    else sessionStorage.setItem("erag_api_base", API);
+  } catch {
+    /* private mode */
+  }
+  const el = document.getElementById("apiUrl");
+  if (el) el.textContent = API;
+  const hostInput = document.getElementById("strictApiUrl");
+  if (hostInput && !hostInput.value) hostInput.placeholder = DEFAULT_API;
+}
+
+function authHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const apiKey = document.getElementById("apiKey")?.value?.trim();
+  const jwt = document.getElementById("strictJwt")?.value?.trim();
+  if (apiKey) headers["X-API-Key"] = apiKey;
+  if (jwt) headers["Authorization"] = `Bearer ${jwt}`;
+  return headers;
+}
 
 const SAMPLE_DOC = {
   title: "Zephyr Cloud Security Policy",
@@ -157,7 +204,7 @@ function applyReviewMode(health) {
         }</span>`;
     } else {
       banner.innerHTML =
-        `<strong>Demo review mode</strong><span>Client-asserted Principal. Honest live profile: <code>${profileBits}</code> — hash/ScoreBoost/extractive is expected on the cheap Demo. For Principal panels use Strict (<a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/PROFILES.md" target="_blank" rel="noreferrer">PROFILES</a> · <a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/COST.md" target="_blank" rel="noreferrer">COST</a>).</span>`;
+        `<strong>Demo review mode</strong><span>Client-asserted Principal. Honest live profile: <code>${profileBits}</code> — hash/ScoreBoost/extractive is expected on the cheap Demo. Point this UI at a Strict host via <code>?api=</code> or the Strict panel below (<a href="${STRICT_PACK}" target="_blank" rel="noreferrer">STRICT_PANEL_PACK</a> · <a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/PROFILES.md" target="_blank" rel="noreferrer">PROFILES</a>).</span>`;
     }
   }
 }
@@ -183,12 +230,9 @@ async function wakeApi(maxAttempts = 4) {
 }
 
 async function apiPost(path, body) {
-  const apiKey = document.getElementById("apiKey")?.value?.trim();
-  const headers = { "Content-Type": "application/json" };
-  if (apiKey) headers["X-API-Key"] = apiKey;
   const response = await fetch(`${API}${path}`, {
     method: "POST",
-    headers,
+    headers: authHeaders(),
     body: JSON.stringify(body),
     cache: "no-store",
     signal: AbortSignal.timeout(60000),
@@ -378,7 +422,9 @@ async function ingestPdfFile(file, title) {
   form.append("groups", (basePayload().groups || ["engineering"]).join(","));
   const headers = {};
   const apiKey = document.getElementById("apiKey")?.value?.trim();
+  const jwt = document.getElementById("strictJwt")?.value?.trim();
   if (apiKey) headers["X-API-Key"] = apiKey;
+  if (jwt) headers["Authorization"] = `Bearer ${jwt}`;
   const res = await fetch(`${API}/v1/ingest/pdf`, { method: "POST", headers, body: form });
   if (!res.ok) {
     const err = await res.text();
@@ -570,6 +616,31 @@ document.getElementById("testAll").addEventListener("click", testAllStrategies);
 
 document.getElementById("ragMode")?.addEventListener("change", syncGlassBoxStrategy);
 syncGlassBoxStrategy();
+
+document.getElementById("applyStrictApi")?.addEventListener("click", async () => {
+  const raw = document.getElementById("strictApiUrl")?.value?.trim();
+  if (!raw) {
+    setStatus("Paste a Strict host URL first (local Docker or Cloud Run).", "warn");
+    return;
+  }
+  setApiBase(raw);
+  setStatus(`Probing Strict host ${API}…`, "idle");
+  const ok = await wakeApi(2);
+  setStatus(
+    ok ? `Connected · review_mode from /health (see banner)` : `Could not reach ${API}`,
+    ok ? "ok" : "error"
+  );
+});
+
+document.getElementById("resetDemoApi")?.addEventListener("click", async () => {
+  setApiBase(DEFAULT_API);
+  const hostInput = document.getElementById("strictApiUrl");
+  if (hostInput) hostInput.value = "";
+  setStatus(`Reset to Demo API ${API}`, "idle");
+  await wakeApi(2);
+});
+
+setApiBase(API);
 
 if (window.pdfjsLib) {
   window.pdfjsLib.GlobalWorkerOptions.workerSrc =

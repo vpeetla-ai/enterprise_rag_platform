@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Enterprise RAG Platform — Glass-box Demo</title>
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="styles.css?v=3" />
     <link rel="stylesheet" href="glassbox.css?v=2" />
   </head>
   <body>
@@ -135,6 +135,23 @@
           <h2>Governed Q&amp;A</h2>
           <p class="gb-guided"><strong>1.</strong> Ask on the seeded corpus → <strong>2.</strong> Watch the center pipeline highlight → <strong>3.</strong> Inspect citations &amp; risk below.</p>
 
+          <details class="strict-panel" open>
+            <summary>Strict panel host (JWT Principal)</summary>
+            <p class="muted" style="margin:0.5rem 0 0.65rem">
+              Demo API stays the default. For Principal review, point at a Strict process
+              (<a href="https://github.com/vpeetla-ai/enterprise_rag_platform/blob/main/docs/STRICT_PANEL_PACK.md" target="_blank" rel="noreferrer">STRICT_PANEL_PACK</a>)
+              or open with <code>?api=https://…</code>.
+            </p>
+            <label for="strictApiUrl">Strict API base URL</label>
+            <input id="strictApiUrl" type="url" placeholder="http://127.0.0.1:8080" />
+            <div class="row row-actions" style="margin-top:0.5rem">
+              <button id="applyStrictApi" type="button" class="ghost">Use Strict host</button>
+              <button id="resetDemoApi" type="button" class="ghost">Reset to Demo</button>
+            </div>
+            <label for="strictJwt" style="margin-top:0.65rem">Bearer JWT (Strict)</label>
+            <input id="strictJwt" type="password" placeholder="mint via scripts/mint_panel_jwt.py" autocomplete="off" />
+          </details>
+
           <label for="query">Enterprise question</label>
           <textarea id="query" rows="3">What is the mandatory API key rotation period at Zephyr Corporation?</textarea>
 
@@ -210,6 +227,6 @@
     <script src="architect-config.js"></script>
     <script src="glassbox.js?v=2"></script>
     <script>document.getElementById("apiUrl").textContent = window.ENTERPRISE_RAG_API || "/api";</script>
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=3"></script>
   </body>
 </html>

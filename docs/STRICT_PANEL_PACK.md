@@ -62,6 +62,15 @@ export RAG_JWT_SECRET=…                        # same as Strict process
 4. Upload a text-layer PDF via demo UI → `/v1/ingest/pdf` → cite `p.N` with viewer jump.  
 5. Strict: mint JWT with `exp`, spoof body tenant — still acme; ingest cannot plant other tenants.
 
+### Glass-box UI → Strict host (no rebuild)
+
+Live Demo defaults to the Render Demo API. For panels:
+
+1. Start Strict (`./scripts/run_strict_local.sh` or Cloud Run).
+2. Open Demo UI with `?api=http://127.0.0.1:8080` **or** paste the URL into **Strict panel host**.
+3. Paste a JWT from `scripts/mint_panel_jwt.py` into **Bearer JWT**.
+4. Confirm banner flips to **Strict review mode** from `/health`.
+
 See [TOP1PCT_ERAG_PROGRAM.md](./TOP1PCT_ERAG_PROGRAM.md) · [PROFILES.md](./PROFILES.md) · [OCR.md](./OCR.md).
 
 ## Two-minute spoof check (any Strict host)

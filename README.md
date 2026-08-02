@@ -82,7 +82,8 @@ Study UI: [ai-architect-interview-playbook.vercel.app](https://ai-architect-inte
 | Guardrails + HITL risk flags | **Implemented** | PII redaction; Strict hard-gates high-risk answers |
 | HITL hard-gate | **Implemented** | Strict / `HITL_HARD_GATE` withholds answer body (`pending_approval`) |
 | Ingest lifecycle | **Implemented** | Replace-by-document_id + `DELETE /v1/documents/{id}` + content_hash dedupe |
-| HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/documents/{id}`, `/v1/strategies` |
+| HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/documents/{id}`, `/v1/strategies`, `/v1/observability/status` |
+| Observability status | **Implemented** | Public compose-plane honesty — Demo/Strict, corpus SoT, Langfuse optional (not auth ledger) |
 | Ingestion data contract + lineage | **Implemented** | 422 blocking issues; `content_hash` + page bounds |
 | Golden eval / GER CI gate | **Implemented** | Shared registry + page/faithfulness metric gates |
 | Vector store adapter (Qdrant) | **Implemented** | Real vectors + BM25+RRF; compose Strict for corpus-of-record |
@@ -258,6 +259,7 @@ API surface:
 | `GET /health` | Liveness + `retrieval` profile + `review_mode` |
 | `GET /v1/strategies` | Retrieval modes, fusion, embedders, generators |
 | `GET /v1/ops/metrics` | Success rate + **p95_latency_ms** |
+| `GET /v1/observability/status` | Compose-plane honesty (public; metrics stay API-key gated under Strict) |
 | `POST /v1/ingest` | Text / optional `pages[]` ingest |
 | `POST /v1/ingest/pdf` | Multipart PDF → page-aware chunks (needs `python-multipart`) |
 | `POST /v1/retrieve` | Access-aware hybrid retrieve (+ optional rerank) |

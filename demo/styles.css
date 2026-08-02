@@ -237,6 +237,23 @@ body {
   border-color: rgba(5, 150, 105, 0.2);
 }
 
+.strict-panel {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--vp-border);
+  border-radius: var(--vp-radius-sm);
+  background: var(--vp-bg-subtle);
+}
+.strict-panel summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.strict-panel input[type="url"],
+.strict-panel input[type="password"] {
+  width: 100%;
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }

@@ -33,7 +33,8 @@ flowchart TB
   end
 
   subgraph Obs["Observability"]
-    LF["Langfuse Cloud<br/>LANGFUSE_*"]
+    ST["GET /v1/observability/status<br/>corpus SoT · Demo/Strict"]
+    LF["Langfuse Cloud<br/>optional export — not the ledger"]
   end
 
   Clients --> GW
@@ -45,8 +46,11 @@ flowchart TB
   PIPE --> GR
   PIPE --> EVAL
   PIPE --> TEL
+  API --> ST
   TEL -.-> LF
 ```
+
+I’d treat Qdrant/memory + access-before-ranking as the corpus ledger. Langfuse is optional export. `GET /v1/observability/status` says that out loud for panels (public; ops metrics stay key-gated under Strict).
 
 ---
 
@@ -93,7 +97,7 @@ Principal (body Demo | JWT Strict)
 | `Reranker` | `ScoreBoostReranker` · `CrossEncoderReranker` | Startup-loaded; CE in full Docker |
 | `Embedder` | `hash` · `local` · `openai`/`gateway` | Dual posture (ADR-0008) |
 | `Generator` | `ExtractiveGenerator` · `LlmGroundedGenerator` | `MOCK_LLM` / `GENERATOR=llm` |
-| Telemetry | Per-request `EventRecorder` + audit JSONL | Langfuse export optional |
+| Telemetry | Per-request `EventRecorder` + audit JSONL | Langfuse export optional; posture on `/v1/observability/status` |
 
 ---
 

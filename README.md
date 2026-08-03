@@ -18,13 +18,13 @@ git clone https://github.com/vpeetla-ai/vpeetla-ai-skills.git
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://enterprise-rag-platform-eta.vercel.app)
 
+**Job of the system:** answer questions only from chunks the caller is allowed to see — hybrid retrieve, page-aware PDF cites, decline when ungrounded. Access before ranking; Demo cheap and labeled; Strict JWT + real vectors when you flip the profile.
+
 [▶ Live demo](https://enterprise-rag-platform-eta.vercel.app) · [🚀 Deploy guide](docs/LIVE_DEMO.md) · [Architecture hub](docs/ARCHITECTURE.md) · [Ecosystem map](docs/ECOSYSTEM.md) · [Top-1% program](docs/TOP1PCT_ERAG_PROGRAM.md) · [Profiles](docs/PROFILES.md) · [Cost](docs/COST.md) · [Panel pack](docs/STRICT_PANEL_PACK.md)
 
-> **First-run note:** The Render API sleeps after inactivity on the free tier — the first request takes ~50s to wake, and the seeded corpus re-ingests on cold start. If a query returns empty, wait and retry once.
+> **First-run note:** Render free tier sleeps — first request can take ~50s, and the seeded corpus re-ingests on cold start. Empty answer? Wait and retry once. That's free-tier wake, not an invented SLA.
 
-**Product bar (top-1% PDF Q&A):** text-layer PDFs with **page-specific citations**, hybrid BM25 + dense **RRF**, optional cross-encoder, grounded answers with **decline** + citation-span faithfulness, Demo vs Strict trust (ADR-0006/0009). Live Demo may honestly run hash/ScoreBoost/extractive; Strict + Qdrant is the claim-aligned path (`/health.product_bar.claim_aligned`).
-
-Production RAG is a governed intelligence system, not a vector database wrapper. This project is a reference implementation and architecture package for an enterprise retrieval-augmented generation platform with access-aware retrieval, context engineering, evaluation, guardrails, observability, and operational decision records.
+**Product bar (PDF Q&A):** text-layer PDFs with **page-specific citations**, hybrid BM25 + dense **RRF**, optional cross-encoder, grounded answers with **decline** + citation-span faithfulness. Live Demo may run hash / ScoreBoost / extractive — labeled. Strict + Qdrant is the claim-aligned path (`/health.product_bar.claim_aligned`). See ADR-0006/0008/0009.
 
 **Portfolio:** [Case study](https://github.com/vpeetla-ai/ai-architecture-portfolio/blob/main/case-studies/enterprise-rag-platform.md) · [Architecture](docs/ARCHITECTURE.md) · [Ecosystem](docs/ECOSYSTEM.md) · [Deploy](docs/LIVE_DEMO.md)
 
@@ -60,11 +60,11 @@ Study UI: [ai-architect-interview-playbook.vercel.app](https://ai-architect-inte
 
 ## Architecture Principles
 
-- Retrieval strategy is the primary architecture decision; vector database choice is an implementation detail.
+- Retrieval strategy is the primary architecture decision; vector DB choice is an adapter.
 - Authorization happens before ranking, not after generation.
-- Every answer must carry citations, ownership, freshness, and traceability.
-- Prompts, retrieval logic, embeddings, and evaluations are versioned release artifacts.
-- The system is designed for continuous improvement through telemetry, feedback, and regression testing.
+- Answers carry citations (with page when PDF), ownership, freshness, and traceability — or they decline.
+- Prompts, retrieval logic, embeddings, and evals are versioned release artifacts.
+- Improve via telemetry + golden regression — not vibes.
 
 ## Implementation Status
 

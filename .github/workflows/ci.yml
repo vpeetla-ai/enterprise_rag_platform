@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+concurrency:
+  group: erag-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m compileall -q src
+
+  build:
+    name: Build
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[dev]"
+      - name: Import smoke
+        run: python -c "from enterprise_rag.vpeetla_observability import get_recorder; print('ok')"
+
+  test:
+    name: Test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: vpeetla-ai/golden-eval-registry
+          path: golden-eval-registry
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip install -e ./golden-eval-registry
+      - name: Pytest (golden eval merge gate)
+        env:
+          GOLDEN_EVAL_REGISTRY_PATH: ${{ github.workspace }}/golden-eval-registry
+        run: PYTHONPATH=src python -m pytest tests/ -q
+
+  ci-ok:
+    name: CI gate
+    needs: [lint, build, test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - run: |
+          test "${{ needs.lint.result }}" = "success"
+          test "${{ needs.build.result }}" = "success"
+          test "${{ needs.test.result }}" = "success"

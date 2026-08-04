@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   ci-gate:
-    uses: ./.github/workflows/tests.yml
+    uses: ./.github/workflows/ci.yml
 
   deploy-demo:
     name: Deploy demo (Vercel)

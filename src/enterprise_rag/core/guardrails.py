@@ -16,8 +16,41 @@ class GuardrailResult:
     redacted_text: str
 
 
+@dataclass(frozen=True)
+class PiiSpan:
+    kind: str
+    start: int
+    end: int
+    redaction_token: str
+
+
+def extract_pii(text: str) -> list[PiiSpan]:
+    """Shared PII extract for Acme embed / AegisAI gateway consumers."""
+    spans: list[PiiSpan] = []
+    for match in GuardrailService._EMAIL.finditer(text):
+        spans.append(PiiSpan("email", match.start(), match.end(), "[REDACTED_EMAIL]"))
+    for match in GuardrailService._PHONE.finditer(text):
+        spans.append(PiiSpan("phone", match.start(), match.end(), "[REDACTED_PHONE]"))
+    for match in GuardrailService._CREDIT_CARD.finditer(text):
+        spans.append(PiiSpan("payment_token", match.start(), match.end(), "[REDACTED_PAYMENT_TOKEN]"))
+    spans.sort(key=lambda s: s.start)
+    return spans
+
+
+def redact_pii(text: str) -> tuple[str, tuple[str, ...]]:
+    spans = extract_pii(text)
+    if not spans:
+        return text, ()
+    out = text
+    for span in reversed(spans):
+        out = out[: span.start] + span.redaction_token + out[span.end :]
+    flags = tuple(dict.fromkeys(f"pii_{s.kind}_redacted" for s in spans))
+    return out, flags
+
+
 class GuardrailService:
     _EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+    _PHONE = re.compile(r"\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b")
     _CREDIT_CARD = re.compile(r"\b(?:\d[ -]*?){13,16}\b")
     _DESTRUCTIVE = re.compile(r"\b(delete|refund|terminate|wire|disable account)\b", re.IGNORECASE)
     _INJECT = re.compile(
@@ -63,15 +96,15 @@ class GuardrailService:
 
     def inspect_input(self, text: str) -> GuardrailResult:
         flags: list[str] = []
-        redacted = self._EMAIL.sub("[REDACTED_EMAIL]", text)
-        redacted = self._CREDIT_CARD.sub("[REDACTED_PAYMENT_TOKEN]", redacted)
-        if redacted != text:
+        redacted, pii_flags = redact_pii(text)
+        if pii_flags:
             flags.append("sensitive_input_redacted")
+            flags.extend(pii_flags)
         if self._DESTRUCTIVE.search(text):
             flags.append("human_approval_required")
         if self._INJECT.search(text):
             flags.append("prompt_injection_suspected")
-        return GuardrailResult(allowed=True, flags=tuple(flags), redacted_text=redacted)
+        return GuardrailResult(allowed=True, flags=tuple(dict.fromkeys(flags)), redacted_text=redacted)
 
     def validate_output(self, answer: str, context: AssembledContext) -> Answer:
         citation_ids = {citation.citation_id for citation in context.citations}

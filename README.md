@@ -79,7 +79,7 @@ Study UI: [ai-architect-interview-playbook.vercel.app](https://ai-architect-inte
 | Faithfulness gate | **Implemented** | Citation-span overlap (`FAITHFULNESS_MIN_OVERLAP`); no citation spoof |
 | LLM grounded generator | **Partial** | `GENERATOR=llm` when keys set; Demo/CI often extractive / `MOCK_LLM` |
 | Pipeline telemetry spans | **Implemented** | Per-request `EventRecorder` + audit JSONL + p95 |
-| Guardrails + HITL risk flags | **Implemented** | PII redaction; Strict hard-gates high-risk answers |
+| Guardrails + HITL risk flags | **Implemented** | PII redaction (`extract_pii` / `redact_pii` shared for Acme/AegisAI gateway); Strict hard-gates high-risk answers |
 | HITL hard-gate | **Implemented** | Strict / `HITL_HARD_GATE` withholds answer body (`pending_approval`) |
 | Ingest lifecycle | **Implemented** | Replace-by-document_id + `DELETE /v1/documents/{id}` + content_hash dedupe |
 | HTTP API | **Implemented** | `/health`, `/v1/answer`, `/v1/ingest`, `/v1/ingest/pdf`, `/v1/documents/{id}`, `/v1/strategies`, `/v1/observability/status` |

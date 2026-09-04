@@ -20,6 +20,8 @@ git clone https://github.com/vpeetla-ai/vpeetla-ai-skills.git
 
 **Job of the system:** answer questions only from chunks the caller is allowed to see — hybrid retrieve, page-aware PDF cites, decline when ungrounded. Access before ranking; Demo cheap and labeled; Strict JWT + real vectors when you flip the profile.
 
+This repo is the **pattern**. It is not Lucid's production binary. Filter by who the caller is *before* you rank — that's the scar, not a slogan.
+
 [▶ Live demo](https://enterprise-rag-platform-eta.vercel.app) · [🚀 Deploy guide](docs/LIVE_DEMO.md) · [Architecture hub](docs/ARCHITECTURE.md) · [Ecosystem map](docs/ECOSYSTEM.md) · [Top-1% program](docs/TOP1PCT_ERAG_PROGRAM.md) · [Profiles](docs/PROFILES.md) · [Cost](docs/COST.md) · [Panel pack](docs/STRICT_PANEL_PACK.md)
 
 > **First-run note:** Render free tier sleeps — first request can take ~50s, and the seeded corpus re-ingests on cold start. Empty answer? Wait and retry once. That's free-tier wake, not an invented SLA.

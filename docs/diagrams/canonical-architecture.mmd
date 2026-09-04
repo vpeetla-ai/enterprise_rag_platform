@@ -1,16 +1,17 @@
 flowchart LR
   User["Enterprise User"] --> App["AI Assistant / Workflow"]
   App --> Gateway["RAG API — FastAPI"]
-  Gateway --> Policy["Guardrails + Access Policy<br/>principal filter BEFORE ranking"]
+  Gateway --> Policy["Guardrails + Access Policy<br/>PII redact · principal filter BEFORE ranking"]
   Gateway --> Orchestrator["RagPipeline"]
-  Orchestrator --> Retrieval["Hybrid Retriever<br/>BM25 + semantic"]
-  Orchestrator --> Rerank["CrossEncoderReranker<br/>ms-marco-MiniLM"]
-  Orchestrator --> Decline{"Score ≥ threshold?"}
+  Orchestrator --> Retrieval["Hybrid Retriever<br/>BM25 + dense + RRF"]
+  Orchestrator --> Rerank["Reranker<br/>ScoreBoost default · CrossEncoderReranker (RAG_RERANKER=cross_encoder)"]
+  Orchestrator --> Decline{"Score ≥ threshold?<br/>faithful? not injected?"}
   Decline -->|no| Refuse["Decline to answer<br/>declined_low_confidence"]
-  Decline -->|yes| Context["Context Assembler"]
-  Context --> Gen["Grounded generator + citations"]
-  Sources["Enterprise docs"] --> Ingestion["POST /v1/ingest"]
+  Decline -->|yes| Context["Context Assembler<br/>page citations"]
+  Context --> Gen["Generator<br/>extractive default · LlmGroundedGenerator (GENERATOR=llm)"]
+  Sources["Enterprise docs / PDF"] --> Ingestion["POST /v1/ingest · /v1/ingest/pdf<br/>page-aware chunks"]
   Ingestion --> Retrieval
-  Gateway --> Obs["Pipeline spans"]
-  Orchestrator --> Eval["Golden eval CI gate"]
-  Obs --> LF["Langfuse<br/>LANGFUSE_*"]
+  Gateway --> Obs["Pipeline spans + audit JSONL"]
+  Orchestrator --> Eval["Golden + adversarial eval CI gate"]
+  Obs --> ST["GET /v1/observability/status<br/>Demo/Strict compose honesty"]
+  Obs -.-> LF["Langfuse<br/>optional — LANGFUSE_* set"]
